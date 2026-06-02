@@ -172,6 +172,7 @@ export class Tower {
       special: this.special,
       color: this.config.color,
       sourceTower: this,
+      projectileSprite: this.config.projectileSprite,
     });
   }
 

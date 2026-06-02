@@ -20,6 +20,9 @@ export class Projectile {
     this.color = data.color;
     this.sourceTower = data.sourceTower;
     this.radius = data.attackType === "aoe" ? 6 : 4;
+    this.sprite = data.projectileSprite || null;
+    const initialDir = normalizeSafe(target.x - x, target.y - y);
+    this.angle = Math.atan2(initialDir.y, initialDir.x);
   }
 
   update(dt, game) {
@@ -39,6 +42,7 @@ export class Projectile {
     }
 
     const dir = normalizeSafe(this.targetX - this.x, this.targetY - this.y);
+    this.angle = Math.atan2(dir.y, dir.x);
     const travel = this.speed * dt;
     this.x += dir.x * travel;
     this.y += dir.y * travel;

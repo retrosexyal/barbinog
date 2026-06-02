@@ -41,6 +41,23 @@ export class Renderer {
     );
   }
 
+  async loadTowerSprites(towerTypes) {
+    const sources = new Set();
+    for (const towerType of Object.values(towerTypes)) {
+      if (towerType.sprite?.imageSrc) sources.add(towerType.sprite.imageSrc);
+      if (towerType.projectileSprite?.imageSrc) sources.add(towerType.projectileSprite.imageSrc);
+    }
+
+    await Promise.all(
+      [...sources].map((source) =>
+        this.loadImage(source).catch((error) => {
+          console.warn(`[Renderer] Failed to load sprite ${source}`, error);
+          return null;
+        })
+      )
+    );
+  }
+
   loadImage(source) {
     const cached = this.images.get(source);
     if (cached) return cached.promise;
@@ -525,6 +542,12 @@ export class Renderer {
       return;
     }
 
+    if (this.drawTowerSprite(ctx, tower)) {
+      ctx.restore();
+      this.drawCalls += 1;
+      return;
+    }
+
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.beginPath();
     ctx.ellipse(0, 15, 21, 8, 0, 0, TAU);
@@ -572,6 +595,36 @@ export class Renderer {
     ctx.fillText(`${tower.level + 1}`, 0, 9);
     ctx.restore();
     this.drawCalls += 1;
+  }
+
+  drawTowerSprite(ctx, tower) {
+    const sprite = tower.config.sprite;
+    const image = sprite?.imageSrc ? this.images.get(sprite.imageSrc)?.image : null;
+    if (!image || !image.complete || image.naturalWidth <= 0) return false;
+
+    const drawWidth = sprite.drawWidth || 56;
+    const drawHeight = sprite.drawHeight || (drawWidth * image.naturalHeight) / image.naturalWidth;
+    const anchorY = sprite.anchorY ?? 0.78;
+
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(0, 16, drawWidth * 0.38, 8, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.drawImage(image, -drawWidth / 2, -drawHeight * anchorY, drawWidth, drawHeight);
+    this.drawTowerLevel(ctx, tower, 0, 10);
+    return true;
+  }
+
+  drawTowerLevel(ctx, tower, x, y) {
+    ctx.fillStyle = "#f9efd8";
+    ctx.strokeStyle = "rgba(35, 24, 15, 0.78)";
+    ctx.lineWidth = 3;
+    ctx.font = "bold 14px Trebuchet MS, Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.strokeText(`${tower.level + 1}`, x, y);
+    ctx.fillText(`${tower.level + 1}`, x, y);
   }
 
   drawTowerConstruction(ctx, tower) {
@@ -722,11 +775,31 @@ export class Renderer {
 
   drawProjectile(ctx, projectile) {
     if (!projectile.active) return;
+    if (this.drawProjectileSprite(ctx, projectile)) {
+      this.drawCalls += 1;
+      return;
+    }
+
     ctx.fillStyle = projectile.color;
     ctx.beginPath();
     ctx.arc(projectile.x, projectile.y, projectile.radius, 0, TAU);
     ctx.fill();
     this.drawCalls += 1;
+  }
+
+  drawProjectileSprite(ctx, projectile) {
+    const sprite = projectile.sprite;
+    const image = sprite?.imageSrc ? this.images.get(sprite.imageSrc)?.image : null;
+    if (!image || !image.complete || image.naturalWidth <= 0) return false;
+
+    const drawWidth = sprite.drawWidth || projectile.radius * 4;
+    const drawHeight = sprite.drawHeight || (drawWidth * image.naturalHeight) / image.naturalWidth;
+    ctx.save();
+    ctx.translate(projectile.x, projectile.y);
+    ctx.rotate(projectile.angle || 0);
+    ctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+    ctx.restore();
+    return true;
   }
 
   drawEffect(ctx, effect) {

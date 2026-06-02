@@ -1,7 +1,7 @@
 import { MAP_CONFIG } from "../config/map.js";
 import { ENEMY_TYPES } from "../config/enemies.js";
 import { NEXT_WAVE_AUTO_START_DELAY, WAVES } from "../config/waves.js";
-import { TOWERS_BY_ID } from "../config/towers.js";
+import { TOWER_TYPES, TOWERS_BY_ID } from "../config/towers.js";
 import { YandexSDK } from "../platform/YandexSDK.js";
 import { Storage } from "../platform/Storage.js";
 import { Leaderboard } from "../platform/Leaderboard.js";
@@ -83,7 +83,7 @@ export class Game {
   async init() {
     this.state = "loading";
     await this.yandex.init();
-    await this.renderer.loadEnemySprites(ENEMY_TYPES);
+    await Promise.all([this.renderer.loadEnemySprites(ENEMY_TYPES), this.renderer.loadTowerSprites(TOWER_TYPES)]);
     this.savedData = await this.storage.init();
     this.leaderboard = new Leaderboard(this.yandex);
     this.bestScore = this.savedData.bestScore || 0;
