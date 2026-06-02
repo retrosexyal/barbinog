@@ -52,6 +52,14 @@ function getTowerStatsText(tower) {
   return `Dmg ${getTowerDamageText(tower)}  Rng ${Math.round(tower.range)}  Rate ${tower.fireRate.toFixed(1)}  ${getTowerSpecialText(tower)}  ${getTowerBuildText(tower)}`;
 }
 
+function getStartWaveLabel(game) {
+  if (game.waveManager.running) return "Wave Active";
+  if (game.state === "waveComplete" && game.nextWaveCountdown != null && game.waveManager.hasMoreWaves()) {
+    return `Start Wave ${Math.ceil(game.nextWaveCountdown)}s`;
+  }
+  return "Start Wave";
+}
+
 export class UI {
   constructor() {
     this.buttons = [];
@@ -152,7 +160,7 @@ export class UI {
     this.drawStat(ctx, panel.x + pad + 444, statY, 138, "Best", formatCompact(game.bestScore), "#9ee3ff");
 
     const startRect = { x: panel.x + panel.w - 184, y: panel.y + 24, w: 154, h: 72 };
-    this.addButton("startWave", startRect, game.waveManager.running ? "Wave Active" : "Start Wave", {
+    this.addButton("startWave", startRect, getStartWaveLabel(game), {
       enabled: !game.waveManager.running && game.state !== "paused" && game.waveManager.hasMoreWaves(),
       kind: "primary",
     });
@@ -194,7 +202,7 @@ export class UI {
     this.drawCompactSelectedPanel(ctx, game, panel.x + pad, selectedY, panel.w - pad * 2, selectedH);
 
     const startRect = { x: panel.x + pad, y: actionY, w: panel.w - pad * 2 - 88, h: actionH };
-    this.addButton("startWave", startRect, game.waveManager.running ? "Wave Active" : "Start Wave", {
+    this.addButton("startWave", startRect, getStartWaveLabel(game), {
       enabled: !game.waveManager.running && game.state !== "paused" && game.waveManager.hasMoreWaves(),
       kind: "primary",
     });
@@ -395,6 +403,9 @@ export class UI {
     this.drawScrim(ctx, 0.22);
     const text = game.waveManager.hasMoreWaves() ? "Wave Complete" : "Last wave cleared";
     drawFittedText(ctx, text, this.lastWidth * 0.5, Math.max(60, game.camera.playRect.h * 0.14), Math.min(460, this.lastWidth - 40), 30, "#f7edd5", "center");
+    if (game.nextWaveCountdown != null && game.waveManager.hasMoreWaves()) {
+      drawFittedText(ctx, `Next wave in ${Math.ceil(game.nextWaveCountdown)}s`, this.lastWidth * 0.5, Math.max(96, game.camera.playRect.h * 0.14 + 34), Math.min(360, this.lastWidth - 40), 16, "#ffd564", "center", "600");
+    }
   }
 
   drawEndScreen(ctx, game, title) {

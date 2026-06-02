@@ -1,6 +1,6 @@
 import { MAP_CONFIG } from "../config/map.js";
 import { ENEMY_TYPES } from "../config/enemies.js";
-import { WAVES } from "../config/waves.js";
+import { NEXT_WAVE_AUTO_START_DELAY, WAVES } from "../config/waves.js";
 import { TOWERS_BY_ID } from "../config/towers.js";
 import { YandexSDK } from "../platform/YandexSDK.js";
 import { Storage } from "../platform/Storage.js";
@@ -68,6 +68,8 @@ export class Game {
     this.selectedTower = null;
     this.towerDropdownOpen = false;
     this.hoverTile = null;
+    this.nextWaveAutoStartDelay = NEXT_WAVE_AUTO_START_DELAY;
+    this.nextWaveCountdown = null;
     this.usedContinue = false;
     this.savedData = {};
     this.leaderboardEntries = [];
@@ -113,7 +115,10 @@ export class Game {
 
     if (!this.isRunState() || this.state === "paused" || this.state === "waveComplete") {
       if (this.state === "paused") this.updateEnemyAnimations(dt, "idle");
-      if (this.state === "waveComplete") this.updateTowerConstruction(dt);
+      if (this.state === "waveComplete") {
+        this.updateTowerConstruction(dt);
+        this.updateNextWaveCountdown(dt);
+      }
       this.updateEffects(dt);
       return;
     }
@@ -149,6 +154,7 @@ export class Game {
     this.selectedTowerType = null;
     this.towerDropdownOpen = false;
     this.hoverTile = null;
+    this.nextWaveCountdown = null;
     this.enemies.length = 0;
     this.projectiles.length = 0;
     this.effects.length = 0;
@@ -179,8 +185,25 @@ export class Game {
       return;
     }
     if (this.waveManager.startNextWave()) {
+      this.nextWaveCountdown = null;
       this.state = "playing";
       this.yandex.gameplayStart();
+    }
+  }
+
+  startNextWaveCountdown() {
+    if (this.state !== "waveComplete" || !this.waveManager.hasMoreWaves()) {
+      this.nextWaveCountdown = null;
+      return;
+    }
+    this.nextWaveCountdown = Math.max(0, this.nextWaveAutoStartDelay);
+  }
+
+  updateNextWaveCountdown(dt) {
+    if (this.nextWaveCountdown == null || !this.waveManager.hasMoreWaves()) return;
+    this.nextWaveCountdown = Math.max(0, this.nextWaveCountdown - dt);
+    if (this.nextWaveCountdown <= 0) {
+      this.startWave();
     }
   }
 
@@ -434,7 +457,10 @@ export class Game {
     this.state = "waveComplete";
     if (this.completedWave > 0 && this.completedWave % 4 === 0 && this._lastAdWave !== this.completedWave) {
       this._lastAdWave = this.completedWave;
-      this.yandex.showFullscreenAd();
+      this.nextWaveCountdown = null;
+      this.yandex.showFullscreenAd().finally(() => this.startNextWaveCountdown());
+    } else {
+      this.startNextWaveCountdown();
     }
   }
 
