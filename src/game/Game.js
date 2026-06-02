@@ -81,6 +81,7 @@ export class Game {
   async init() {
     this.state = "loading";
     await this.yandex.init();
+    await this.renderer.loadEnemySprites(ENEMY_TYPES);
     this.savedData = await this.storage.init();
     this.leaderboard = new Leaderboard(this.yandex);
     this.bestScore = this.savedData.bestScore || 0;
@@ -111,6 +112,7 @@ export class Game {
     }
 
     if (!this.isRunState() || this.state === "paused" || this.state === "waveComplete") {
+      if (this.state === "paused") this.updateEnemyAnimations(dt, "idle");
       this.updateEffects(dt);
       return;
     }
@@ -315,6 +317,12 @@ export class Game {
         this.enemies[i] = this.enemies[this.enemies.length - 1];
         this.enemies.pop();
       }
+    }
+  }
+
+  updateEnemyAnimations(dt, state) {
+    for (let i = 0; i < this.enemies.length; i += 1) {
+      this.enemies[i].updateAnimation(dt, state);
     }
   }
 

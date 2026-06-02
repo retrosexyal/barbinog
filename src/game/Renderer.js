@@ -14,6 +14,40 @@ export class Renderer {
     this.width = 1;
     this.height = 1;
     this.drawCalls = 0;
+    this.images = new Map();
+  }
+
+  async loadEnemySprites(enemyTypes) {
+    const sources = new Set();
+    for (const enemyType of Object.values(enemyTypes)) {
+      for (const animation of Object.values(enemyType.animations || {})) {
+        if (animation.imageSrc) sources.add(animation.imageSrc);
+      }
+    }
+
+    await Promise.all(
+      [...sources].map((source) =>
+        this.loadImage(source).catch((error) => {
+          console.warn(`[Renderer] Failed to load sprite ${source}`, error);
+          return null;
+        })
+      )
+    );
+  }
+
+  loadImage(source) {
+    const cached = this.images.get(source);
+    if (cached) return cached.promise;
+
+    const image = new Image();
+    image.decoding = "async";
+    const promise = new Promise((resolve, reject) => {
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error(`Unable to load image: ${source}`));
+    });
+    image.src = source;
+    this.images.set(source, { image, promise });
+    return promise;
   }
 
   resize() {
@@ -58,7 +92,7 @@ export class Renderer {
     this.drawRanges(ctx, game);
     for (let i = 0; i < game.towers.length; i += 1) this.drawTower(ctx, game.towers[i]);
     for (let i = 0; i < game.projectiles.length; i += 1) this.drawProjectile(ctx, game.projectiles[i]);
-    for (let i = 0; i < game.enemies.length; i += 1) this.drawEnemy(ctx, game.enemies[i]);
+    for (let i = 0; i < game.enemies.length; i += 1) this.drawEnemy(ctx, game.enemies[i], game);
     for (let i = 0; i < game.effects.length; i += 1) this.drawEffect(ctx, game.effects[i]);
   }
 
@@ -258,10 +292,17 @@ export class Renderer {
     this.drawCalls += 1;
   }
 
-  drawEnemy(ctx, enemy) {
+  drawEnemy(ctx, enemy, game) {
     if (!enemy.active) return;
     ctx.save();
     ctx.translate(enemy.x, enemy.y);
+
+    if (this.drawEnemySprite(ctx, enemy, game)) {
+      ctx.restore();
+      this.drawCalls += 1;
+      return;
+    }
+
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.beginPath();
     ctx.ellipse(0, enemy.radius * 0.78, enemy.radius * 1.1, enemy.radius * 0.38, 0, 0, TAU);
@@ -294,13 +335,57 @@ export class Renderer {
     ctx.fill();
     ctx.stroke();
 
-    const hpRatio = Math.max(0, enemy.hp / enemy.maxHp);
-    ctx.fillStyle = "#221b16";
-    ctx.fillRect(-enemy.radius, -enemy.radius - 10, enemy.radius * 2, 4);
-    ctx.fillStyle = hpRatio > 0.45 ? "#72d36b" : hpRatio > 0.2 ? "#ffd564" : "#ef6158";
-    ctx.fillRect(-enemy.radius, -enemy.radius - 10, enemy.radius * 2 * hpRatio, 4);
+    this.drawEnemyHpBar(ctx, enemy, -enemy.radius - 10, enemy.radius * 2);
     ctx.restore();
     this.drawCalls += 1;
+  }
+
+  drawEnemySprite(ctx, enemy, game) {
+    const animations = enemy.animations;
+    if (!animations) return false;
+
+    const state = game?.state === "paused" && animations.idle ? "idle" : enemy.animationState;
+    const animation = animations[state] || animations.run || animations.idle;
+    const image = animation?.imageSrc ? this.images.get(animation.imageSrc)?.image : null;
+    if (!image || !image.complete || image.naturalWidth <= 0) return false;
+
+    const frameCount = animation.frames || 1;
+    const frameWidth = animation.frameWidth || Math.floor(image.naturalWidth / frameCount);
+    const frameHeight = animation.frameHeight || image.naturalHeight;
+    const frameIndex = Math.floor(enemy.animationTime * (animation.fps || 8)) % frameCount;
+    const drawWidth = animation.drawWidth || enemy.radius * 4;
+    const drawHeight = animation.drawHeight || (drawWidth * frameHeight) / frameWidth;
+    const anchorY = animation.anchorY ?? 0.8;
+    const sourceX = frameIndex * frameWidth;
+
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(0, enemy.radius * 0.78, enemy.radius * 1.45, enemy.radius * 0.38, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.save();
+    if (animation.flipX !== false && enemy.facingX < 0) ctx.scale(-1, 1);
+    ctx.drawImage(image, sourceX, 0, frameWidth, frameHeight, -drawWidth / 2, -drawHeight * anchorY, drawWidth, drawHeight);
+    ctx.restore();
+
+    if (enemy.slowTimer > 0) {
+      ctx.strokeStyle = "#aeeeff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(0, -enemy.radius * 0.2, enemy.radius * 1.5, enemy.radius, 0, 0, TAU);
+      ctx.stroke();
+    }
+
+    this.drawEnemyHpBar(ctx, enemy, -drawHeight * anchorY - 7, Math.max(enemy.radius * 2, drawWidth * 0.54));
+    return true;
+  }
+
+  drawEnemyHpBar(ctx, enemy, y, width) {
+    const hpRatio = Math.max(0, enemy.hp / enemy.maxHp);
+    ctx.fillStyle = "#221b16";
+    ctx.fillRect(-width / 2, y, width, 4);
+    ctx.fillStyle = hpRatio > 0.45 ? "#72d36b" : hpRatio > 0.2 ? "#ffd564" : "#ef6158";
+    ctx.fillRect(-width / 2, y, width * hpRatio, 4);
   }
 
   drawProjectile(ctx, projectile) {

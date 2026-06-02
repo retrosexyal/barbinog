@@ -13,6 +13,11 @@ export class Enemy {
     this.color = config.color;
     this.sprite = config.sprite;
     this.traits = config.traits;
+    this.animations = config.animations || null;
+    this.animationState = this.animations?.run ? "run" : "idle";
+    this.animationTime = Math.random();
+    this.facingX = 1;
+    this.isMoving = false;
     this.armorType = config.armorType || "unarmored";
     this.maxHp = Math.floor(config.hp * waveScale);
     this.hp = this.maxHp;
@@ -37,6 +42,21 @@ export class Enemy {
     this.y = this._sample.y;
   }
 
+  updateAnimation(dt, state = this.animationState, speedScale = 1) {
+    if (!this.animations) return;
+    this.animationState = state;
+    this.animationTime += dt * speedScale;
+  }
+
+  getMovementAnimationState(dx, dy) {
+    if (!this.animations) return "idle";
+    if (Math.abs(dy) > Math.abs(dx)) {
+      if (dy > 0 && this.animations.runDown) return "runDown";
+      if (dy < 0 && this.animations.runUp) return "runUp";
+    }
+    return this.animations.run ? "run" : "idle";
+  }
+
   update(dt, game) {
     if (!this.active) return;
 
@@ -56,6 +76,8 @@ export class Enemy {
     }
 
     const speedMultiplier = this.slowTimer > 0 ? 1 - this.slowPercent : 1;
+    const previousX = this.x;
+    const previousY = this.y;
     this.pathDistance += this.baseSpeed * speedMultiplier * dt;
     this.pathProgress = this.pathDistance / this.path.totalLength;
 
@@ -69,6 +91,12 @@ export class Enemy {
     this.segmentIndex = this._sample.segmentIndex;
     this.x = this._sample.x;
     this.y = this._sample.y;
+
+    const dx = this.x - previousX;
+    const dy = this.y - previousY;
+    if (Math.abs(dx) > 0.05) this.facingX = dx < 0 ? -1 : 1;
+    this.isMoving = dx * dx + dy * dy > 0.0001;
+    this.updateAnimation(dt, this.isMoving ? this.getMovementAnimationState(dx, dy) : "idle", Math.max(0.35, speedMultiplier));
   }
 
   applyDamage(amount, damageType, game, sourceTower = null, showText = true) {
