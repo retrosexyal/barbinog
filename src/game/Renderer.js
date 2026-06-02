@@ -171,6 +171,9 @@ export class Renderer {
   }
 
   drawBuildPads(ctx, game) {
+    const showPads = !!game.selectedTowerType && game.isRunState();
+    if (!showPads) return;
+
     const map = game.map;
     const tile = map.tileSize;
     for (let i = 0; i < map.buildableTiles.length; i += 1) {
@@ -178,8 +181,7 @@ export class Renderer {
       const px = x * tile;
       const py = y * tile;
       const canBuild = map.canBuildAt(x, y);
-      const highlight = game.selectedTowerType && game.isRunState();
-      ctx.fillStyle = highlight ? (canBuild ? "rgba(115, 173, 83, 0.65)" : "rgba(120, 76, 61, 0.45)") : "#b7a06c";
+      ctx.fillStyle = canBuild ? "rgba(115, 173, 83, 0.65)" : "rgba(120, 76, 61, 0.45)";
       ctx.fillRect(px + 4, py + 4, tile - 8, tile - 8);
       ctx.strokeStyle = "rgba(67, 48, 27, 0.6)";
       ctx.strokeRect(px + 4, py + 4, tile - 8, tile - 8);
@@ -243,6 +245,14 @@ export class Renderer {
   drawTower(ctx, tower) {
     ctx.save();
     ctx.translate(tower.x, tower.y);
+
+    if (tower.isBuilding) {
+      this.drawTowerConstruction(ctx, tower);
+      ctx.restore();
+      this.drawCalls += 1;
+      return;
+    }
+
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.beginPath();
     ctx.ellipse(0, 15, 21, 8, 0, 0, TAU);
@@ -290,6 +300,56 @@ export class Renderer {
     ctx.fillText(`${tower.level + 1}`, 0, 9);
     ctx.restore();
     this.drawCalls += 1;
+  }
+
+  drawTowerConstruction(ctx, tower) {
+    const progress = Math.max(0, Math.min(1, tower.buildProgress || 0));
+    const height = 44;
+    const builtHeight = height * progress;
+
+    ctx.fillStyle = "rgba(0,0,0,0.24)";
+    ctx.beginPath();
+    ctx.ellipse(0, 15, 22, 8, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.fillStyle = "#6b5338";
+    ctx.fillRect(-18, 8, 36, 10);
+    ctx.fillStyle = "#3b2b1e";
+    ctx.fillRect(-15, 13, 30, 5);
+
+    ctx.strokeStyle = "#d3a85f";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-17, 12);
+    ctx.lineTo(-12, -24);
+    ctx.moveTo(17, 12);
+    ctx.lineTo(12, -24);
+    ctx.moveTo(-22, 0);
+    ctx.lineTo(22, -15);
+    ctx.moveTo(-22, -14);
+    ctx.lineTo(22, 1);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-24, 18 - builtHeight, 48, builtHeight);
+    ctx.clip();
+    ctx.fillStyle = tower.config.color;
+    ctx.globalAlpha = 0.72;
+    ctx.fillRect(-14, -22, 28, 40);
+    ctx.beginPath();
+    ctx.moveTo(0, -32);
+    ctx.lineTo(20, 0);
+    ctx.lineTo(-20, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = "rgba(255, 230, 156, 0.9)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 16, 24, -Math.PI / 2, -Math.PI / 2 + TAU * progress);
+    ctx.stroke();
   }
 
   drawEnemy(ctx, enemy, game) {

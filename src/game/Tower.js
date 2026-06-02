@@ -50,6 +50,10 @@ export class Tower {
     this.targetMode = this.config.targetMode;
     this._targets = [];
     this.recalculateStats();
+    this.buildTime = Number.isFinite(this.config.buildTime) ? Math.max(0, this.config.buildTime) : 0;
+    this.buildRemaining = this.buildTime;
+    this.buildProgress = this.buildTime > 0 ? 0 : 1;
+    this.isBuilding = this.buildRemaining > 0;
   }
 
   recalculateStats() {
@@ -82,6 +86,8 @@ export class Tower {
   }
 
   update(dt, game) {
+    if (this.updateConstruction(dt)) return;
+
     if (this.cooldown > 0) {
       this.cooldown = Math.max(0, this.cooldown - dt);
       if (this.cooldown > 0) return;
@@ -92,6 +98,16 @@ export class Tower {
 
     this.attack(target, game);
     this.cooldown = 1 / this.fireRate;
+  }
+
+  updateConstruction(dt) {
+    if (!this.isBuilding) return false;
+    this.buildRemaining = Math.max(0, this.buildRemaining - dt);
+    this.buildProgress = this.buildTime > 0 ? 1 - this.buildRemaining / this.buildTime : 1;
+    if (this.buildRemaining > 0) return true;
+    this.isBuilding = false;
+    this.buildProgress = 1;
+    return false;
   }
 
   findTarget(game) {
@@ -178,7 +194,7 @@ export class Tower {
   }
 
   canUpgrade() {
-    return this.level < this.config.upgrades.length;
+    return !this.isBuilding && this.level < this.config.upgrades.length;
   }
 
   nextUpgrade() {
@@ -186,6 +202,7 @@ export class Tower {
   }
 
   upgrade() {
+    if (this.isBuilding) return false;
     const upgrade = this.nextUpgrade();
     if (!upgrade) return false;
     this.level += 1;

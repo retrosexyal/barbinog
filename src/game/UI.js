@@ -42,6 +42,16 @@ function getTowerSpecialText(tower) {
   return attackType;
 }
 
+function getTowerBuildText(tower) {
+  if (tower?.isBuilding) return `Building ${Math.round((tower.buildProgress || 0) * 100)}%`;
+  const buildTime = Number.isFinite(tower?.buildTime) ? tower.buildTime : 0;
+  return buildTime > 0 ? `Build ${buildTime.toFixed(1)}s` : "Instant build";
+}
+
+function getTowerStatsText(tower) {
+  return `Dmg ${getTowerDamageText(tower)}  Rng ${Math.round(tower.range)}  Rate ${tower.fireRate.toFixed(1)}  ${getTowerSpecialText(tower)}  ${getTowerBuildText(tower)}`;
+}
+
 export class UI {
   constructor() {
     this.buttons = [];
@@ -217,15 +227,17 @@ export class UI {
   }
 
   drawTowerDropdown(ctx, game, x, y, w, h, tight) {
-    const selected = TOWERS_BY_ID[game.selectedTowerType] || game.selectedTower?.config || TOWER_TYPES[0];
-    const label = game.selectedTower ? `Selected: ${game.selectedTower.name}` : `Tower: ${selected.name}  ${selected.cost} v`;
+    const selected = TOWERS_BY_ID[game.selectedTowerType] || game.selectedTower?.config || null;
+    const label = game.selectedTower ? `Selected: ${game.selectedTower.name}` : selected ? `Tower: ${selected.name}  ${selected.cost} v` : "Choose Tower";
     this.addButton("toggleTowerDropdown", { x, y, w, h }, label, { kind: game.towerDropdownOpen ? "gold" : "default" });
     this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
 
-    ctx.fillStyle = selected.color;
-    ctx.beginPath();
-    ctx.arc(x + 18, y + h * 0.5, tight ? 8 : 10, 0, Math.PI * 2);
-    ctx.fill();
+    if (selected) {
+      ctx.fillStyle = selected.color;
+      ctx.beginPath();
+      ctx.arc(x + 18, y + h * 0.5, tight ? 8 : 10, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     if (!game.towerDropdownOpen) return;
 
@@ -275,7 +287,7 @@ export class UI {
     }
 
     const name = game.selectedTower ? `${tower.name} Lv.${tower.level + 1}` : tower.name;
-    const stats = `Dmg ${getTowerDamageText(tower)}  Rng ${Math.round(tower.range)}  Rate ${tower.fireRate.toFixed(1)}  ${getTowerSpecialText(tower)}`;
+    const stats = game.selectedTower?.isBuilding ? getTowerBuildText(tower) : getTowerStatsText(tower);
 
     if (!game.selectedTower || h < 54) {
       drawFittedText(ctx, name, x + 10, y + h * 0.35, w - 20, 15, "#f7edd5", "left");
@@ -287,11 +299,12 @@ export class UI {
     drawFittedText(ctx, name, x + 10, y + 17, w - actionW - 18, 14, "#f7edd5", "left");
     drawFittedText(ctx, stats, x + 10, y + 40, w - actionW - 18, 11, "#cdbb91", "left", "600");
 
-    const upgrade = tower.nextUpgrade();
+    const upgrade = tower.isBuilding ? null : tower.nextUpgrade();
     const buttonH = Math.min(30, h - 14);
     const buttonY = y + (h - buttonH) * 0.5;
     const sellW = Math.min(62, actionW * 0.42);
-    this.addButton("upgradeTower", { x: x + w - actionW - 6, y: buttonY, w: actionW - sellW - 8, h: buttonH }, upgrade ? `${upgrade.cost}` : "Max", {
+    const upgradeLabel = tower.isBuilding ? "Build" : upgrade ? `${upgrade.cost}` : "Max";
+    this.addButton("upgradeTower", { x: x + w - actionW - 6, y: buttonY, w: actionW - sellW - 8, h: buttonH }, upgradeLabel, {
       enabled: !!upgrade && game.gold >= upgrade.cost,
       kind: "gold",
     });
@@ -340,14 +353,15 @@ export class UI {
     const name = game.selectedTower ? `${tower.name} Lv.${tower.level + 1}` : tower.name;
     drawFittedText(ctx, name, x + 12, y + 18, w - 24, 16, "#f7edd5", "left");
 
-    const stats = `Dmg ${getTowerDamageText(tower)}  Rng ${Math.round(tower.range)}  Rate ${tower.fireRate.toFixed(1)}  ${getTowerSpecialText(tower)}`;
+    const stats = game.selectedTower?.isBuilding ? getTowerBuildText(tower) : getTowerStatsText(tower);
     drawFittedText(ctx, stats, x + 12, y + 44, w - 24, 13, "#cdbb91", "left", "600");
 
     if (game.selectedTower) {
-      const upgrade = tower.nextUpgrade();
+      const upgrade = tower.isBuilding ? null : tower.nextUpgrade();
       const buttonY = y + h - 38;
       const sellW = Math.min(92, w * 0.33);
-      this.addButton("upgradeTower", { x: x + 10, y: buttonY, w: w - sellW - 26, h: 28 }, upgrade ? `Upgrade ${upgrade.cost}` : "Max Level", {
+      const upgradeLabel = tower.isBuilding ? "Building" : upgrade ? `Upgrade ${upgrade.cost}` : "Max Level";
+      this.addButton("upgradeTower", { x: x + 10, y: buttonY, w: w - sellW - 26, h: 28 }, upgradeLabel, {
         enabled: !!upgrade && game.gold >= upgrade.cost,
         kind: "gold",
       });

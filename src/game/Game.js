@@ -64,7 +64,7 @@ export class Game {
     this.bestScore = 0;
     this.baseTotalKills = 0;
     this.unlockedTowers = Object.keys(TOWERS_BY_ID);
-    this.selectedTowerType = "archer";
+    this.selectedTowerType = null;
     this.selectedTower = null;
     this.towerDropdownOpen = false;
     this.hoverTile = null;
@@ -113,6 +113,7 @@ export class Game {
 
     if (!this.isRunState() || this.state === "paused" || this.state === "waveComplete") {
       if (this.state === "paused") this.updateEnemyAnimations(dt, "idle");
+      if (this.state === "waveComplete") this.updateTowerConstruction(dt);
       this.updateEffects(dt);
       return;
     }
@@ -145,7 +146,7 @@ export class Game {
     this.score = 0;
     this.usedContinue = false;
     this.selectedTower = null;
-    this.selectedTowerType = "archer";
+    this.selectedTowerType = null;
     this.towerDropdownOpen = false;
     this.hoverTile = null;
     this.enemies.length = 0;
@@ -255,7 +256,7 @@ export class Game {
   upgradeSelectedTower() {
     const tower = this.selectedTower;
     const upgrade = tower?.nextUpgrade();
-    if (!tower || !upgrade || this.gold < upgrade.cost) return false;
+    if (!tower || tower.isBuilding || !upgrade || this.gold < upgrade.cost) return false;
     this.gold -= upgrade.cost;
     tower.upgrade();
     this.recalculateScore();
@@ -329,6 +330,12 @@ export class Game {
   updateTowers(dt) {
     for (let i = 0; i < this.towers.length; i += 1) {
       this.towers[i].update(dt, this);
+    }
+  }
+
+  updateTowerConstruction(dt) {
+    for (let i = 0; i < this.towers.length; i += 1) {
+      this.towers[i].updateConstruction(dt);
     }
   }
 

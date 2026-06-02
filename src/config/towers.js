@@ -6,6 +6,7 @@
 // - upgrades are additive deltas applied in order. Keep costs higher than the gold
 //   earned from one average enemy group to preserve meaningful choices.
 // - attackType controls delivery mechanics. damageType controls the attack-vs-armor table.
+// - buildTime is construction time in seconds before the tower starts attacking.
 
 export const TARGET_MODES = Object.freeze(["first", "last", "nearest", "strongest"]);
 
@@ -15,6 +16,7 @@ export const TOWER_TYPES = Object.freeze([
     name: "Archer Tower",
     description: "Cheap, fast single-target shots.",
     cost: 90,
+    buildTime: 1.2,
     sellRatio: 0.7,
     icon: "A",
     color: "#c48a42",
@@ -47,6 +49,7 @@ export const TOWER_TYPES = Object.freeze([
     name: "Cannon Tower",
     description: "Slow siege blasts with splash damage.",
     cost: 150,
+    buildTime: 2.0,
     sellRatio: 0.68,
     icon: "C",
     color: "#6e5a43",
@@ -79,6 +82,7 @@ export const TOWER_TYPES = Object.freeze([
     name: "Frost Tower",
     description: "Low damage, reliable slow.",
     cost: 120,
+    buildTime: 1.6,
     sellRatio: 0.7,
     icon: "F",
     color: "#6fd4ff",
@@ -111,6 +115,7 @@ export const TOWER_TYPES = Object.freeze([
     name: "Magic Tower",
     description: "High single-target magic beam.",
     cost: 180,
+    buildTime: 2.2,
     sellRatio: 0.68,
     icon: "M",
     color: "#8c6dff",
@@ -143,6 +148,7 @@ export const TOWER_TYPES = Object.freeze([
     name: "Sentinel Post",
     description: "Short-range chain strikes without blocking the road.",
     cost: 140,
+    buildTime: 1.8,
     sellRatio: 0.7,
     icon: "S",
     color: "#3f7f89",
