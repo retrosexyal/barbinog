@@ -60,7 +60,7 @@ export class Input {
       return;
     }
 
-    this.game.handleMapClick(this.tile.x, this.tile.y);
+    this.game.handleMapClick(this.tile.x, this.tile.y, this.world.x, this.world.y);
   }
 
   onKeyDown(event) {

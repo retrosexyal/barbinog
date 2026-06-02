@@ -246,8 +246,10 @@ export class Game {
     else if (action === "rewardContinue") this.rewardContinue();
   }
 
-  handleMapClick(tileX, tileY) {
-    const tower = this.getTowerAtTile(tileX, tileY);
+  handleMapClick(tileX, tileY, worldX = null, worldY = null) {
+    const towerAtPointer =
+      Number.isFinite(worldX) && Number.isFinite(worldY) ? this.renderer.hitTestTowerAt(this.towers, worldX, worldY) : null;
+    const tower = towerAtPointer || this.getTowerAtTile(tileX, tileY);
     if (tower) {
       this.selectedTower = tower;
       this.selectedTowerType = null;

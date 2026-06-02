@@ -9,6 +9,10 @@ function rand01(x, y, salt = 0) {
   return (hash2(x + salt * 1013, y - salt * 917) & 0xffff) / 0xffff;
 }
 
+function compareTowerDrawOrder(a, b) {
+  return a.y - b.y || a.x - b.x;
+}
+
 export class Renderer {
   constructor(canvas, camera) {
     this.canvas = canvas;
@@ -21,6 +25,9 @@ export class Renderer {
     this.images = new Map();
     this.mapBackground = null;
     this.mapBackgroundKey = "";
+    this.towerDrawOrder = [];
+    this.hitTestCanvas = null;
+    this.hitTestCtx = null;
   }
 
   async loadEnemySprites(enemyTypes) {
@@ -113,10 +120,18 @@ export class Renderer {
   drawWorld(ctx, game) {
     this.drawMap(ctx, game);
     this.drawRanges(ctx, game);
-    for (let i = 0; i < game.towers.length; i += 1) this.drawTower(ctx, game.towers[i]);
+    this.drawTowers(ctx, game.towers);
     for (let i = 0; i < game.projectiles.length; i += 1) this.drawProjectile(ctx, game.projectiles[i]);
     for (let i = 0; i < game.enemies.length; i += 1) this.drawEnemy(ctx, game.enemies[i], game);
     for (let i = 0; i < game.effects.length; i += 1) this.drawEffect(ctx, game.effects[i]);
+  }
+
+  drawTowers(ctx, towers) {
+    const order = this.towerDrawOrder;
+    order.length = 0;
+    for (let i = 0; i < towers.length; i += 1) order.push(towers[i]);
+    order.sort(compareTowerDrawOrder);
+    for (let i = 0; i < order.length; i += 1) this.drawTower(ctx, order[i]);
   }
 
   drawMap(ctx, game) {
@@ -614,6 +629,56 @@ export class Renderer {
     ctx.drawImage(image, -drawWidth / 2, -drawHeight * anchorY, drawWidth, drawHeight);
     this.drawTowerLevel(ctx, tower, 0, 10);
     return true;
+  }
+
+  hitTestTowerAt(towers, worldX, worldY) {
+    let topTower = null;
+    for (let i = 0; i < towers.length; i += 1) {
+      const tower = towers[i];
+      if (!this.hitTestTower(tower, worldX, worldY)) continue;
+      if (!topTower || compareTowerDrawOrder(tower, topTower) > 0) topTower = tower;
+    }
+    return topTower;
+  }
+
+  hitTestTower(tower, worldX, worldY) {
+    const sprite = tower.config.sprite;
+    const image = !tower.isBuilding && sprite?.imageSrc ? this.images.get(sprite.imageSrc)?.image : null;
+
+    if (image && image.complete && image.naturalWidth > 0) {
+      const drawWidth = sprite.drawWidth || 56;
+      const drawHeight = sprite.drawHeight || (drawWidth * image.naturalHeight) / image.naturalWidth;
+      const anchorY = sprite.anchorY ?? 0.78;
+      const left = tower.x - drawWidth / 2;
+      const top = tower.y - drawHeight * anchorY;
+      if (worldX < left || worldX > left + drawWidth || worldY < top || worldY > top + drawHeight) return false;
+
+      const sourceX = Math.floor(((worldX - left) / drawWidth) * image.naturalWidth);
+      const sourceY = Math.floor(((worldY - top) / drawHeight) * image.naturalHeight);
+      return this.sampleImageAlpha(image, sourceX, sourceY) > 32;
+    }
+
+    const halfWidth = tower.isBuilding ? 26 : 24;
+    const top = tower.y - (tower.isBuilding ? 40 : 34);
+    const bottom = tower.y + (tower.isBuilding ? 24 : 22);
+    return worldX >= tower.x - halfWidth && worldX <= tower.x + halfWidth && worldY >= top && worldY <= bottom;
+  }
+
+  sampleImageAlpha(image, sourceX, sourceY) {
+    if (sourceX < 0 || sourceY < 0 || sourceX >= image.naturalWidth || sourceY >= image.naturalHeight) return 0;
+    if (!this.hitTestCanvas) {
+      this.hitTestCanvas = this.createStaticCanvas(1, 1);
+      this.hitTestCtx = this.hitTestCanvas.getContext("2d");
+    }
+
+    const ctx = this.hitTestCtx;
+    ctx.clearRect(0, 0, 1, 1);
+    try {
+      ctx.drawImage(image, sourceX, sourceY, 1, 1, 0, 0, 1, 1);
+      return ctx.getImageData(0, 0, 1, 1).data[3];
+    } catch {
+      return 255;
+    }
   }
 
   drawTowerLevel(ctx, tower, x, y) {
