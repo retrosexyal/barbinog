@@ -2,7 +2,7 @@ export const NEXT_WAVE_AUTO_START_DELAY = 10;
 
 export const WAVES = Object.freeze([
   { wave: 1, groups: [{ enemyId: "dog", count: 10, spawnInterval: 0.75, delayBeforeNextGroup: 0 }], rewardOnComplete: 35 },
-  { wave: 2, groups: [{ enemyId: "basic", count: 14, spawnInterval: 0.65, delayBeforeNextGroup: 0 }], rewardOnComplete: 40 },
+  { wave: 2, groups: [{ enemyId: "boar", count: 14, spawnInterval: 0.65, delayBeforeNextGroup: 0 }], rewardOnComplete: 40 },
   {
     wave: 3,
     groups: [
