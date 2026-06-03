@@ -83,7 +83,11 @@ export class Game {
   async init() {
     this.state = "loading";
     await this.yandex.init();
-    await Promise.all([this.renderer.loadEnemySprites(ENEMY_TYPES), this.renderer.loadTowerSprites(TOWER_TYPES)]);
+    await Promise.all([
+      this.renderer.loadMapArtSprites(),
+      this.renderer.loadEnemySprites(ENEMY_TYPES),
+      this.renderer.loadTowerSprites(TOWER_TYPES),
+    ]);
     this.savedData = await this.storage.init();
     this.leaderboard = new Leaderboard(this.yandex);
     this.bestScore = this.savedData.bestScore || 0;

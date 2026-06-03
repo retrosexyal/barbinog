@@ -27,6 +27,10 @@ export class Input {
     event.preventDefault();
     const point = this.pointFromEvent(event);
     this.game.ui.setPointer(point.x, point.y);
+    if (this.game.ui.blocksPointer(point.x, point.y)) {
+      this.game.hoverTile = null;
+      return;
+    }
     if (!this.game.camera.isInPlayArea(point.x, point.y)) {
       this.game.hoverTile = null;
       return;
@@ -50,6 +54,7 @@ export class Input {
       return;
     }
 
+    if (this.game.ui.blocksPointer(point.x, point.y)) return;
     if (!this.game.isRunState() || !this.game.camera.isInPlayArea(point.x, point.y)) return;
     this.game.camera.screenToWorld(point.x, point.y, this.world);
     this.game.map.worldToTile(this.world.x, this.world.y, this.tile);

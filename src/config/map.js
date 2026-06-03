@@ -1,6 +1,11 @@
 const tileSize = 48;
-const width = 16;
+const contentOffsetX = 1;
+const width = 18;
 const height = 24;
+
+function sx(x) {
+  return x + contentOffsetX;
+}
 
 const drawSquare = (
   width = 1,
@@ -18,18 +23,18 @@ const drawSquare = (
 ];
 
 const pathWaypoints = [
-  { x: 0, y: 7 },
-  { x: 13, y: 7 },
-  { x: 13, y: 21 },
-  { x: 5, y: 21 },
-  { x: 5, y: 2 },
-  { x: 10, y: 2 },
-  { x: 10, y: 7 },
-  { x: 13, y: 7 },
-  ...drawSquare(5, 5, 13, 21, -1, -1),
-  { x: 5, y: 21 },
-  { x: 5, y: 12 },
-  { x: 9, y: 12 },
+  { x: sx(0), y: 7 },
+  { x: sx(13), y: 7 },
+  { x: sx(13), y: 21 },
+  { x: sx(5), y: 21 },
+  { x: sx(5), y: 2 },
+  { x: sx(10), y: 2 },
+  { x: sx(10), y: 7 },
+  { x: sx(13), y: 7 },
+  ...drawSquare(5, 5, sx(13), 21, -1, -1),
+  { x: sx(5), y: 21 },
+  { x: sx(5), y: 12 },
+  { x: sx(9), y: 12 },
 ];
 
 function key(x, y) {
@@ -68,13 +73,13 @@ function makePathTiles() {
 
 function makeBuildableTiles(blocked) {
   const set = new Set();
-  addRect(set, 6, 3, 4, 4);
-  addRect(set, 4, 6, 1, 1);
-  addRect(set, 4, 8, 1, 1);
-  addRect(set, 6, 8, 1, 1);
-  addRect(set, 12, 15, 1, 1);
-  addRect(set, 7, 20, 1, 1);
-  addRect(set, 9, 17, 4, 4);
+  addRect(set, sx(6), 3, 4, 4);
+  addRect(set, sx(4), 6, 1, 1);
+  addRect(set, sx(4), 8, 1, 1);
+  addRect(set, sx(6), 8, 1, 1);
+  addRect(set, sx(12), 15, 1, 1);
+  addRect(set, sx(7), 20, 1, 1);
+  addRect(set, sx(9), 17, 4, 4);
 
   for (const blockedKey of blocked) {
     set.delete(blockedKey);
@@ -97,8 +102,8 @@ export const MAP_CONFIG = Object.freeze({
   width,
   height,
   pathWaypoints,
-  spawnPosition: { x: 0, y: 7 },
-  basePosition: { x: 9, y: 12 },
+  spawnPosition: { x: sx(0), y: 7 },
+  basePosition: { x: sx(9), y: 12 },
   buildableTiles: toTiles(buildableSet),
   blockedTiles: toTiles(blockedSet),
 });

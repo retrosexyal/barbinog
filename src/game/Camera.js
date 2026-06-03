@@ -11,6 +11,9 @@ export class Camera {
     this.y = 0;
     this.scale = 1;
     this.uiRect = { x: 0, y: 0, w: 1, h: 1 };
+    this.statsRect = { x: 0, y: 0, w: 0, h: 0 };
+    this.leftUiRect = { x: 0, y: 0, w: 0, h: 0 };
+    this.rightUiRect = { x: 0, y: 0, w: 0, h: 0 };
     this.playRect = { x: 0, y: 0, w: 1, h: 1 };
   }
 
@@ -19,22 +22,60 @@ export class Camera {
     this.height = Math.max(1, height);
 
     const portrait = this.height > this.width;
-    const uiHeight = portrait ? this.height * 0.3 : clamp(this.height * 0.25, 160, 220);
-    this.uiRect.x = 0;
-    this.uiRect.y = this.height - uiHeight;
-    this.uiRect.w = this.width;
-    this.uiRect.h = uiHeight;
+    if (portrait) {
+      const statsHeight = 36;
+      const uiHeight = clamp(this.height * 0.19, 128, 162);
+      this.statsRect.x = 0;
+      this.statsRect.y = 0;
+      this.statsRect.w = this.width;
+      this.statsRect.h = statsHeight;
+      this.uiRect.x = 0;
+      this.uiRect.y = this.height - uiHeight;
+      this.uiRect.w = this.width;
+      this.uiRect.h = uiHeight;
+      this.leftUiRect.x = 0;
+      this.leftUiRect.y = 0;
+      this.leftUiRect.w = 0;
+      this.leftUiRect.h = 0;
+      this.rightUiRect.x = 0;
+      this.rightUiRect.y = 0;
+      this.rightUiRect.w = 0;
+      this.rightUiRect.h = 0;
+      this.playRect.x = 0;
+      this.playRect.y = statsHeight;
+      this.playRect.w = this.width;
+      this.playRect.h = Math.max(1, this.height - statsHeight - uiHeight);
+    } else {
+      const fullHeightMapWidth = this.height * (this.worldWidth / this.worldHeight);
+      const maxSideUiWidth = Math.max(0, (this.width - fullHeightMapWidth) * 0.5);
+      const sideUiWidth = Math.floor(maxSideUiWidth);
+      this.statsRect.x = 0;
+      this.statsRect.y = 0;
+      this.statsRect.w = 0;
+      this.statsRect.h = 0;
+      this.uiRect.x = 0;
+      this.uiRect.y = 0;
+      this.uiRect.w = 0;
+      this.uiRect.h = 0;
+      this.leftUiRect.x = 0;
+      this.leftUiRect.y = 0;
+      this.leftUiRect.w = sideUiWidth;
+      this.leftUiRect.h = this.height;
+      this.rightUiRect.x = this.width - sideUiWidth;
+      this.rightUiRect.y = 0;
+      this.rightUiRect.w = sideUiWidth;
+      this.rightUiRect.h = this.height;
+      this.playRect.x = sideUiWidth;
+      this.playRect.y = 0;
+      this.playRect.w = Math.max(1, this.width - sideUiWidth * 2);
+      this.playRect.h = this.height;
+    }
 
-    this.playRect.x = 0;
-    this.playRect.y = 0;
-    this.playRect.w = this.width;
-    this.playRect.h = Math.max(1, this.height - uiHeight);
-
-    const margin = portrait ? 0 : 18;
+    const margin = 0;
     const scaleX = (this.playRect.w - margin * 2) / this.worldWidth;
     const scaleY = (this.playRect.h - margin * 2) / this.worldHeight;
     this.scale = Math.max(0.2, Math.min(scaleX, scaleY));
-    this.x = (this.playRect.w - this.worldWidth * this.scale) * 0.5;
+    this.x = this.playRect.x + (this.playRect.w - this.worldWidth * this.scale) * 0.5;
     this.y = this.playRect.y + (this.playRect.h - this.worldHeight * this.scale) * 0.5;
   }
 

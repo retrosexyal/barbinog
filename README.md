@@ -6,11 +6,11 @@ Pure JavaScript HTML5 Canvas tower defense MVP for browser play and Yandex Games
 
 Use any static local server from this folder:
 
-```bash
-python -m http.server 8000
-```
+check `http://localhost:3000/` if work
 
-Then open `http://127.0.0.1:8000`.
+npx create .
+
+Then open `http://localhost:3000/`.
 
 The project includes a local `sdk.js` mock so `/sdk.js`, saves, rewarded ads, interstitials, and leaderboard calls do not crash outside Yandex Games.
 
