@@ -8,7 +8,12 @@
 // - attackType controls delivery mechanics. damageType controls the attack-vs-armor table.
 // - buildTime is construction time in seconds before the tower starts attacking.
 
-export const TARGET_MODES = Object.freeze(["first", "last", "nearest", "strongest"]);
+export const TARGET_MODES = Object.freeze([
+  "first",
+  "last",
+  "nearest",
+  "strongest",
+]);
 
 export const TOWER_TYPES = Object.freeze([
   {
@@ -22,13 +27,16 @@ export const TOWER_TYPES = Object.freeze([
     color: "#c48a42",
     shape: "arrow",
     sprite: {
-      imageSrc: new URL("../assets/towers/archer-tower.png", import.meta.url).href,
+      imageSrc: new URL("../assets/towers/archer-tower.png", import.meta.url)
+        .href,
       drawWidth: 58,
       drawHeight: 68,
-      anchorY: 0.76,
+      anchorY: 0.66,
     },
+    projectileDY: -30,
     projectileSprite: {
-      imageSrc: new URL("../assets/projectiles/arrow.png", import.meta.url).href,
+      imageSrc: new URL("../assets/projectiles/arrow.png", import.meta.url)
+        .href,
       drawWidth: 28,
       drawHeight: 9,
     },
@@ -50,9 +58,30 @@ export const TOWER_TYPES = Object.freeze([
       chainFalloff: 0,
     },
     upgrades: [
-      { name: "Fletching", cost: 70, damage: 8, range: 12, fireRate: 0.15, projectileSpeed: 40 },
-      { name: "Falcon Aim", cost: 130, damage: 14, range: 16, fireRate: 0.2, projectileSpeed: 55 },
-      { name: "Volley Crew", cost: 230, damage: 20, range: 20, fireRate: 0.35, projectileSpeed: 70 },
+      {
+        name: "Fletching",
+        cost: 70,
+        damage: 8,
+        range: 12,
+        fireRate: 0.15,
+        projectileSpeed: 40,
+      },
+      {
+        name: "Falcon Aim",
+        cost: 130,
+        damage: 14,
+        range: 16,
+        fireRate: 0.2,
+        projectileSpeed: 55,
+      },
+      {
+        name: "Volley Crew",
+        cost: 230,
+        damage: 20,
+        range: 20,
+        fireRate: 0.35,
+        projectileSpeed: 70,
+      },
     ],
   },
   {
@@ -65,11 +94,21 @@ export const TOWER_TYPES = Object.freeze([
     icon: "C",
     color: "#6e5a43",
     shape: "cannon",
+    sprite: {
+      imageSrc: new URL("../assets/towers/canon-tower.png", import.meta.url)
+        .href,
+      drawWidth: 58,
+      drawHeight: 68,
+      anchorY: 0.56,
+    },
     projectileSprite: {
-      imageSrc: new URL("../assets/projectiles/cannonball.png", import.meta.url).href,
+      imageSrc: new URL("../assets/projectiles/cannonball.png", import.meta.url)
+        .href,
       drawWidth: 16,
       drawHeight: 16,
     },
+    projectileDX: 10,
+    projectileDY: -30,
     range: 135,
     minDamage: 18,
     maxDamage: 20,
@@ -88,9 +127,30 @@ export const TOWER_TYPES = Object.freeze([
       chainFalloff: 0,
     },
     upgrades: [
-      { name: "Packed Powder", cost: 100, damage: 18, range: 8, fireRate: 0.04, special: { splashRadius: 8 } },
-      { name: "Iron Bombs", cost: 190, damage: 30, range: 10, fireRate: 0.06, special: { splashRadius: 10 } },
-      { name: "Earthshaker", cost: 330, damage: 48, range: 12, fireRate: 0.08, special: { splashRadius: 14 } },
+      {
+        name: "Packed Powder",
+        cost: 100,
+        damage: 18,
+        range: 8,
+        fireRate: 0.04,
+        special: { splashRadius: 8 },
+      },
+      {
+        name: "Iron Bombs",
+        cost: 190,
+        damage: 30,
+        range: 10,
+        fireRate: 0.06,
+        special: { splashRadius: 10 },
+      },
+      {
+        name: "Earthshaker",
+        cost: 330,
+        damage: 48,
+        range: 12,
+        fireRate: 0.08,
+        special: { splashRadius: 14 },
+      },
     ],
   },
   {
@@ -103,8 +163,18 @@ export const TOWER_TYPES = Object.freeze([
     icon: "F",
     color: "#6fd4ff",
     shape: "crystal",
+    sprite: {
+      imageSrc: new URL("../assets/towers/frost-tower.png", import.meta.url)
+        .href,
+      drawWidth: 58,
+      drawHeight: 68,
+      anchorY: 0.56,
+    },
     projectileSprite: {
-      imageSrc: new URL("../assets/projectiles/frost-shard.png", import.meta.url).href,
+      imageSrc: new URL(
+        "../assets/projectiles/frost-shard.png",
+        import.meta.url,
+      ).href,
       drawWidth: 24,
       drawHeight: 11,
     },
@@ -126,9 +196,30 @@ export const TOWER_TYPES = Object.freeze([
       chainFalloff: 0,
     },
     upgrades: [
-      { name: "Cold Focus", cost: 85, damage: 5, range: 10, fireRate: 0.08, special: { slowPercent: 0.05, slowDuration: 0.35 } },
-      { name: "Deep Freeze", cost: 160, damage: 8, range: 12, fireRate: 0.1, special: { slowPercent: 0.08, slowDuration: 0.45, splashRadius: 8 } },
-      { name: "Winter Spire", cost: 280, damage: 12, range: 18, fireRate: 0.12, special: { slowPercent: 0.1, slowDuration: 0.6, splashRadius: 12 } },
+      {
+        name: "Cold Focus",
+        cost: 85,
+        damage: 5,
+        range: 10,
+        fireRate: 0.08,
+        special: { slowPercent: 0.05, slowDuration: 0.35 },
+      },
+      {
+        name: "Deep Freeze",
+        cost: 160,
+        damage: 8,
+        range: 12,
+        fireRate: 0.1,
+        special: { slowPercent: 0.08, slowDuration: 0.45, splashRadius: 8 },
+      },
+      {
+        name: "Winter Spire",
+        cost: 280,
+        damage: 12,
+        range: 18,
+        fireRate: 0.12,
+        special: { slowPercent: 0.1, slowDuration: 0.6, splashRadius: 12 },
+      },
     ],
   },
   {
@@ -192,11 +283,34 @@ export const TOWER_TYPES = Object.freeze([
       chainFalloff: 0.72,
     },
     upgrades: [
-      { name: "Long Halberds", cost: 95, damage: 10, range: 8, fireRate: 0.1, special: { chainTargets: 1 } },
-      { name: "Signal Horn", cost: 170, damage: 16, range: 12, fireRate: 0.14, special: { chainFalloff: 0.08 } },
-      { name: "Elite Watch", cost: 300, damage: 26, range: 15, fireRate: 0.18, special: { chainTargets: 1 } },
+      {
+        name: "Long Halberds",
+        cost: 95,
+        damage: 10,
+        range: 8,
+        fireRate: 0.1,
+        special: { chainTargets: 1 },
+      },
+      {
+        name: "Signal Horn",
+        cost: 170,
+        damage: 16,
+        range: 12,
+        fireRate: 0.14,
+        special: { chainFalloff: 0.08 },
+      },
+      {
+        name: "Elite Watch",
+        cost: 300,
+        damage: 26,
+        range: 15,
+        fireRate: 0.18,
+        special: { chainTargets: 1 },
+      },
     ],
   },
 ]);
 
-export const TOWERS_BY_ID = Object.freeze(Object.fromEntries(TOWER_TYPES.map((tower) => [tower.id, tower])));
+export const TOWERS_BY_ID = Object.freeze(
+  Object.fromEntries(TOWER_TYPES.map((tower) => [tower.id, tower])),
+);

@@ -18,7 +18,11 @@ function getBaseDamageRange(config) {
   const fallbackDamage = Number.isFinite(config.damage) ? config.damage : 0;
   return normalizeDamageRange(
     Number.isFinite(config.minDamage) ? config.minDamage : fallbackDamage,
-    Number.isFinite(config.maxDamage) ? config.maxDamage : Number.isFinite(config.minDamage) ? config.minDamage : fallbackDamage,
+    Number.isFinite(config.maxDamage)
+      ? config.maxDamage
+      : Number.isFinite(config.minDamage)
+        ? config.minDamage
+        : fallbackDamage,
   );
 }
 
@@ -44,13 +48,17 @@ export class Tower {
     const center = map.tileCenter(tileX, tileY);
     this.x = center.x;
     this.y = center.y;
+    this.projectileX = center.x + (TOWERS_BY_ID[typeId].projectileDX || 0);
+    this.projectileY = center.y + (TOWERS_BY_ID[typeId].projectileDY || 0);
     this.level = 0;
     this.spentGold = this.config.cost;
     this.cooldown = 0;
     this.targetMode = this.config.targetMode;
     this._targets = [];
     this.recalculateStats();
-    this.buildTime = Number.isFinite(this.config.buildTime) ? Math.max(0, this.config.buildTime) : 0;
+    this.buildTime = Number.isFinite(this.config.buildTime)
+      ? Math.max(0, this.config.buildTime)
+      : 0;
     this.buildRemaining = this.buildTime;
     this.buildProgress = this.buildTime > 0 ? 0 : 1;
     this.isBuilding = this.buildRemaining > 0;
@@ -103,7 +111,8 @@ export class Tower {
   updateConstruction(dt) {
     if (!this.isBuilding) return false;
     this.buildRemaining = Math.max(0, this.buildRemaining - dt);
-    this.buildProgress = this.buildTime > 0 ? 1 - this.buildRemaining / this.buildTime : 1;
+    this.buildProgress =
+      this.buildTime > 0 ? 1 - this.buildRemaining / this.buildTime : 1;
     if (this.buildRemaining > 0) return true;
     this.isBuilding = false;
     this.buildProgress = 1;
@@ -111,7 +120,12 @@ export class Tower {
   }
 
   findTarget(game) {
-    const enemies = game.queryEnemiesInRange(this.x, this.y, this.rangeSq, this._targets);
+    const enemies = game.queryEnemiesInRange(
+      this.x,
+      this.y,
+      this.rangeSq,
+      this._targets,
+    );
     if (enemies.length === 0) return null;
 
     let best = enemies[0];
@@ -142,7 +156,10 @@ export class Tower {
     bestValue = best.pathDistance;
     for (let i = 1; i < enemies.length; i += 1) {
       const value = enemies[i].pathDistance;
-      if ((this.targetMode === "last" && value < bestValue) || (this.targetMode !== "last" && value > bestValue)) {
+      if (
+        (this.targetMode === "last" && value < bestValue) ||
+        (this.targetMode !== "last" && value > bestValue)
+      ) {
         bestValue = value;
         best = enemies[i];
       }
@@ -160,31 +177,54 @@ export class Tower {
 
     if (this.attackType === "instant") {
       target.applyDamage(damage, this.damageType, game, this);
-      game.spawnEffect("beam", this.x, this.y, { x2: target.x, y2: target.y, color: this.config.color });
+      game.spawnEffect("beam", this.x, this.y, {
+        x2: target.x,
+        y2: target.y,
+        color: this.config.color,
+      });
       return;
     }
 
-    game.spawnProjectile(this.x, this.y, target, {
-      projectileSpeed: this.projectileSpeed,
-      damage,
-      attackType: this.attackType,
-      damageType: this.damageType,
-      special: this.special,
-      color: this.config.color,
-      sourceTower: this,
-      projectileSprite: this.config.projectileSprite,
-    });
+    game.spawnProjectile(
+      this.projectileX || this.x,
+      this.projectileY || this.y,
+      target,
+      {
+        projectileSpeed: this.projectileSpeed,
+        damage,
+        attackType: this.attackType,
+        damageType: this.damageType,
+        special: this.special,
+        color: this.config.color,
+        sourceTower: this,
+        projectileSprite: this.config.projectileSprite,
+      },
+    );
   }
 
   chainAttack(target, game) {
     let damage = this.rollDamage();
-    const targets = game.queryEnemiesInRange(target.x, target.y, (this.special.splashRadius || this.range) ** 2, game.tempEnemyQuery);
+    const targets = game.queryEnemiesInRange(
+      target.x,
+      target.y,
+      (this.special.splashRadius || this.range) ** 2,
+      game.tempEnemyQuery,
+    );
     let hits = 0;
-    for (let i = 0; i < targets.length && hits < this.special.chainTargets; i += 1) {
+    for (
+      let i = 0;
+      i < targets.length && hits < this.special.chainTargets;
+      i += 1
+    ) {
       const enemy = targets[i];
       if (!enemy.active) continue;
       enemy.applyDamage(damage, this.damageType, game, this);
-      game.spawnEffect("beam", this.x, this.y, { x2: enemy.x, y2: enemy.y, color: this.config.color, duration: 0.08 });
+      game.spawnEffect("beam", this.x, this.y, {
+        x2: enemy.x,
+        y2: enemy.y,
+        color: this.config.color,
+        duration: 0.08,
+      });
       damage *= this.special.chainFalloff || 0.7;
       hits += 1;
     }
