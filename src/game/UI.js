@@ -418,7 +418,7 @@ export class UI {
       const name = tower.name.replace(" Tower", "").replace(" Post", "");
       this.addButton("selectTowerType", rect, `${name} ${tower.cost}`, {
         meta: { typeId: tower.id },
-        enabled: game.unlockedTowers.includes(tower.id),
+        enabled,
         kind: game.selectedTowerType === tower.id ? "gold" : "default",
       });
       const button = this.buttons[this.buttons.length - 1];
@@ -626,7 +626,7 @@ export class UI {
       const isSelected = game.selectedTowerType === tower.id;
       this.addButton("selectTowerType", { x: x + 6, y: rowY, w: w - 12, h: rowH }, `${tower.name}  ${tower.cost}`, {
         meta: { typeId: tower.id },
-        enabled: game.unlockedTowers.includes(tower.id),
+        enabled: game.unlockedTowers.includes(tower.id) && canAfford,
         kind: isSelected ? "gold" : "default",
       });
       const button = this.buttons[this.buttons.length - 1];
@@ -690,7 +690,7 @@ export class UI {
       const enabled = game.unlockedTowers.includes(tower.id) && game.gold >= tower.cost;
       this.addButton("selectTowerType", rect, compact ? tower.icon : tower.name.replace(" Tower", ""), {
         meta: { typeId: tower.id },
-        enabled: game.unlockedTowers.includes(tower.id),
+        enabled,
         kind: game.selectedTowerType === tower.id ? "gold" : "default",
       });
       const button = this.buttons[this.buttons.length - 1];

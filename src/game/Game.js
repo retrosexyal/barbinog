@@ -117,6 +117,12 @@ export class Game {
       this._fpsFrames = 0;
     }
 
+    if (this.state === "gameOver" || this.state === "victory") {
+      this.updateEnemyAnimations(dt, "idle");
+      this.updateEffects(dt);
+      return;
+    }
+
     if (!this.isRunState() || this.state === "paused" || this.state === "waveComplete") {
       if (this.state === "paused") this.updateEnemyAnimations(dt, "idle");
       if (this.state === "waveComplete") {
@@ -182,7 +188,7 @@ export class Game {
   }
 
   startWave() {
-    if (this.state === "paused" || this.waveManager.running) return;
+    if (this.state === "menu" || this.state === "paused" || this.state === "gameOver" || this.state === "victory" || this.waveManager.running) return;
     if (this.state === "waveComplete") this.state = "playing";
     if (!this.waveManager.hasMoreWaves()) {
       this.victory();
@@ -238,9 +244,7 @@ export class Game {
     else if (action === "pause") this.togglePause();
     else if (action === "toggleTowerDropdown") this.towerDropdownOpen = !this.towerDropdownOpen;
     else if (action === "selectTowerType") {
-      this.selectedTowerType = meta.typeId;
-      this.selectedTower = null;
-      this.towerDropdownOpen = false;
+      this.selectTowerType(meta.typeId);
     } else if (action === "upgradeTower") this.upgradeSelectedTower();
     else if (action === "sellTower") this.sellSelectedTower();
     else if (action === "leaderboard") this.openLeaderboard();
@@ -262,8 +266,23 @@ export class Game {
     }
 
     if (this.selectedTowerType) {
-      this.buildTower(this.selectedTowerType, tileX, tileY);
+      if (this.map.canBuildAt(tileX, tileY)) {
+        this.buildTower(this.selectedTowerType, tileX, tileY);
+      } else {
+        this.selectedTowerType = null;
+      }
     }
+  }
+
+  selectTowerType(typeId) {
+    const config = TOWERS_BY_ID[typeId];
+    if (!config || !this.unlockedTowers.includes(typeId) || this.gold < config.cost) {
+      return false;
+    }
+    this.selectedTowerType = typeId;
+    this.selectedTower = null;
+    this.towerDropdownOpen = false;
+    return true;
   }
 
   buildTower(typeId, tileX, tileY) {
