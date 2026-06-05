@@ -423,22 +423,58 @@ export class UI {
       });
       const button = this.buttons[this.buttons.length - 1];
       this.drawButton(ctx, button);
-      this.drawTowerIcon(ctx, tower, rect.x + 19, rect.y + rect.h * 0.5, 11, 12);
+      this.drawTowerIcon(ctx, game, tower, rect.x + 19, rect.y + rect.h * 0.5, 11, 12);
       if (!enabled) {
         drawFittedText(ctx, "low", rect.x + rect.w - 9, rect.y + rect.h * 0.5, 34, 10, "#b9ab8e", "right", "600");
       }
     }
   }
 
-  drawTowerIcon(ctx, tower, x, y, radius, size = 13) {
-    ctx.fillStyle = tower.color || "#c48a42";
+  getTowerIconImage(game, tower) {
+    const config = tower?.config || tower;
+    const source = config?.sprite?.imageSrc;
+    const image = source ? game.renderer.images.get(source)?.image : null;
+    return image && image.complete && image.naturalWidth > 0 ? image : null;
+  }
+
+  drawTowerIcon(ctx, game, tower, x, y, radius, size = 13) {
+    const config = tower?.config || tower;
+    const image = this.getTowerIconImage(game, config);
+    if (image) {
+      const sprite = config.sprite || {};
+      const sourceWidth = sprite.drawWidth || image.naturalWidth;
+      const sourceHeight = sprite.drawHeight || image.naturalHeight;
+      const aspect = sourceWidth / Math.max(1, sourceHeight);
+      const maxWidth = radius * 2.35;
+      const maxHeight = radius * 2.55;
+      let drawWidth = maxWidth;
+      let drawHeight = drawWidth / aspect;
+      if (drawHeight > maxHeight) {
+        drawHeight = maxHeight;
+        drawWidth = drawHeight * aspect;
+      }
+
+      ctx.save();
+      ctx.fillStyle = "rgba(20, 14, 10, 0.82)";
+      ctx.beginPath();
+      ctx.arc(x, y, radius + 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 238, 190, 0.42)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.drawImage(image, x - drawWidth / 2, y - drawHeight / 2, drawWidth, drawHeight);
+      ctx.restore();
+      return;
+    }
+
+    ctx.fillStyle = config.color || "#c48a42";
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = "rgba(255, 238, 190, 0.55)";
     ctx.lineWidth = 2;
     ctx.stroke();
-    drawFittedText(ctx, tower.icon || "T", x, y + 0.5, radius * 1.4, size, "#1b1711", "center", "800");
+    drawFittedText(ctx, config.icon || "T", x, y + 0.5, radius * 1.4, size, "#1b1711", "center", "800");
   }
 
   drawDesktopSelectedPanel(ctx, game, x, y, w, h) {
@@ -457,7 +493,7 @@ export class UI {
     }
 
     const title = game.selectedTower ? `${tower.name} Lv.${tower.level + 1}` : tower.name;
-    this.drawTowerIcon(ctx, tower, x + 28, y + 32, 17, 15);
+    this.drawTowerIcon(ctx, game, tower, x + 28, y + 32, 17, 15);
     drawFittedText(ctx, title, x + 54, y + 24, w - 64, 16, "#f7edd5", "left");
     if (!game.selectedTower && Number.isFinite(tower.cost)) {
       drawFittedText(ctx, `${tower.cost} gold`, x + 54, y + 46, w - 64, 12, "#ffd564", "left", "600");
@@ -567,10 +603,7 @@ export class UI {
     this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
 
     if (selected) {
-      ctx.fillStyle = selected.color;
-      ctx.beginPath();
-      ctx.arc(x + 18, y + h * 0.5, tight ? 8 : 10, 0, Math.PI * 2);
-      ctx.fill();
+      this.drawTowerIcon(ctx, game, selected, x + 18, y + h * 0.5, tight ? 8 : 10, tight ? 10 : 12);
     }
 
     if (!game.towerDropdownOpen) return;
@@ -598,10 +631,7 @@ export class UI {
       });
       const button = this.buttons[this.buttons.length - 1];
       this.drawButton(ctx, button);
-      ctx.fillStyle = tower.color;
-      ctx.beginPath();
-      ctx.arc(button.rect.x + 17, button.rect.y + rowH * 0.5, tight ? 7 : 8, 0, Math.PI * 2);
-      ctx.fill();
+      this.drawTowerIcon(ctx, game, tower, button.rect.x + 17, button.rect.y + rowH * 0.5, tight ? 7 : 8, tight ? 9 : 10);
       if (!canAfford) {
         drawFittedText(ctx, "low gold", button.rect.x + button.rect.w - 10, button.rect.y + rowH * 0.5, 64, 10, "#b9ab8e", "right", "600");
       }
@@ -665,10 +695,7 @@ export class UI {
       });
       const button = this.buttons[this.buttons.length - 1];
       this.drawButton(ctx, button);
-      ctx.fillStyle = tower.color;
-      ctx.beginPath();
-      ctx.arc(rect.x + rect.w * 0.5, rect.y + 21, compact ? 10 : 13, 0, Math.PI * 2);
-      ctx.fill();
+      this.drawTowerIcon(ctx, game, tower, rect.x + rect.w * 0.5, rect.y + 21, compact ? 10 : 13, compact ? 11 : 13);
       drawFittedText(ctx, `${tower.cost}`, rect.x + rect.w * 0.5, rect.y + rect.h - 13, rect.w - 8, 12, enabled ? "#ffd564" : "#9a8c75", "center", "600");
     }
   }
