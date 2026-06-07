@@ -5,26 +5,17 @@ export const WAVES = Object.freeze([
   { wave: 2, groups: [{ enemyId: "boar", count: 14, spawnInterval: 0.65, delayBeforeNextGroup: 0 }], rewardOnComplete: 40 },
   {
     wave: 3,
-    groups: [
-      { enemyId: "swarm", count: 16, spawnInterval: 0.35, delayBeforeNextGroup: 1 },
-      { enemyId: "basic", count: 8, spawnInterval: 0.7, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "walrus", count: 12, spawnInterval: 0.8, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 55,
   },
   {
     wave: 4,
-    groups: [
-      { enemyId: "fast", count: 12, spawnInterval: 0.48, delayBeforeNextGroup: 1 },
-      { enemyId: "basic", count: 10, spawnInterval: 0.6, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "murloc", count: 20, spawnInterval: 0.42, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 65,
   },
   {
     wave: 5,
-    groups: [
-      { enemyId: "armored", count: 8, spawnInterval: 0.9, delayBeforeNextGroup: 1 },
-      { enemyId: "swarm", count: 18, spawnInterval: 0.32, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "flyingSheep", count: 16, spawnInterval: 0.55, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 80,
   },
   {
