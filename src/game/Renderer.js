@@ -144,6 +144,9 @@ export class Renderer {
     ctx.drawImage(background, 0, 0);
     this.drawCalls += 1;
 
+    this.mapArt.drawBase(ctx, map, performance.now() / 1000);
+    this.drawCalls += 1;
+
     this.drawBuildPads(ctx, game);
   }
 

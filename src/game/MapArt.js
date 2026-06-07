@@ -3,13 +3,23 @@ export const MAP_ART_ASSETS = Object.freeze({
   pathFill: new URL("../assets/map/path-fill.png", import.meta.url).href,
   buildStone: new URL("../assets/map/build-stone.png", import.meta.url).href,
   portal: new URL("../assets/map/portal.png", import.meta.url).href,
-  base: new URL("../assets/map/base.png", import.meta.url).href,
+  base: new URL("../assets/map/base_2.png", import.meta.url).href,
   tree: new URL("../assets/map/tree.png", import.meta.url).href,
   pine: new URL("../assets/map/pine.png", import.meta.url).href,
   rocks: new URL("../assets/map/rocks.png", import.meta.url).href,
   ruins: new URL("../assets/map/ruins.png", import.meta.url).href,
   angel: new URL("../assets/map/angel.png", import.meta.url).href,
   water: new URL("../assets/map/water.png", import.meta.url).href,
+});
+
+const BASE_ANIMATION = Object.freeze({
+  frames: 6,
+  fps: 6,
+  sourceY: 0,
+  sourceHeight: 300,
+  drawWidth: 170,
+  drawHeight: 199,
+  anchorY: 0.9,
 });
 
 function hash2(x, y) {
@@ -35,7 +45,6 @@ export class MapArt {
     this.drawSparseDecorations(ctx, map, "back");
     this.drawUniqueLandmarks(ctx, map);
     this.drawSparseDecorations(ctx, map, "front");
-    this.drawBase(ctx, map);
     this.drawSpawn(ctx, map);
   }
 
@@ -146,9 +155,12 @@ export class MapArt {
     ctx.fillRect(px + 4, py + 4, tile - 8, tile - 8);
   }
 
-  drawBase(ctx, map) {
+  drawBase(ctx, map, time = 0) {
     const center = map.tileCenter(map.basePosition.x, map.basePosition.y);
-    this.drawAnchoredAsset(ctx, "base", center.x + map.tileSize * 0.12, center.y + map.tileSize * 0.82, 164, 200, 0.9);
+    const x = center.x + map.tileSize * 0.12;
+    const y = center.y + map.tileSize * 0.82;
+    if (this.drawAnimatedBase(ctx, x, y, time)) return;
+    this.drawAnchoredAsset(ctx, "base", x, y, 164, 200, 0.9);
   }
 
   drawSpawn(ctx, map) {
@@ -175,6 +187,30 @@ export class MapArt {
     const image = this.getImage(name);
     if (!image) return;
     ctx.drawImage(image, x - width / 2, y - height * anchorY, width, height);
+  }
+
+  drawAnimatedBase(ctx, x, y, time) {
+    const image = this.getImage("base");
+    if (!image) return false;
+
+    const frameCount = BASE_ANIMATION.frames;
+    const frameWidth = Math.floor(image.naturalWidth / frameCount);
+    const frameHeight = Math.min(BASE_ANIMATION.sourceHeight, image.naturalHeight - BASE_ANIMATION.sourceY);
+    const frameIndex = Math.floor(time * BASE_ANIMATION.fps) % frameCount;
+    const sourceX = frameIndex * frameWidth;
+
+    ctx.drawImage(
+      image,
+      sourceX,
+      BASE_ANIMATION.sourceY,
+      frameWidth,
+      frameHeight,
+      x - BASE_ANIMATION.drawWidth / 2,
+      y - BASE_ANIMATION.drawHeight * BASE_ANIMATION.anchorY,
+      BASE_ANIMATION.drawWidth,
+      BASE_ANIMATION.drawHeight
+    );
+    return true;
   }
 
   drawCoverImage(ctx, image, x, y, width, height) {
