@@ -76,7 +76,9 @@ export class Input {
     }
     if (event.code === "Escape") {
       event.preventDefault();
-      if (this.game.state === "leaderboard") this.game.closeLeaderboard();
+      if (this.game.talentPanelOpen) this.game.talentPanelOpen = false;
+      else if (this.game.pendingAbilityId) this.game.pendingAbilityId = null;
+      else if (this.game.state === "leaderboard") this.game.closeLeaderboard();
       else if (this.game.state !== "menu") this.game.togglePause();
     }
   }

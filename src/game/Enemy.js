@@ -36,6 +36,11 @@ export class Enemy {
     this.slowTimer = 0;
     this.poisonTimer = 0;
     this.poisonDps = 0;
+    this.rootTimer = 0;
+    this.vulnerabilityTimer = 0;
+    this.increasedDamageTaken = 0;
+    this.judgementTimer = 0;
+    this.judgementVulnerability = 0;
     this._sample = { x: 0, y: 0, segmentIndex: 0 };
     path.getStart(this._sample);
     this.x = this._sample.x;
@@ -66,6 +71,20 @@ export class Enemy {
       if (!this.active) return;
     }
 
+    if (this.rootTimer > 0) {
+      this.rootTimer = Math.max(0, this.rootTimer - dt);
+    }
+
+    if (this.vulnerabilityTimer > 0) {
+      this.vulnerabilityTimer = Math.max(0, this.vulnerabilityTimer - dt);
+      if (this.vulnerabilityTimer <= 0) this.increasedDamageTaken = 0;
+    }
+
+    if (this.judgementTimer > 0) {
+      this.judgementTimer = Math.max(0, this.judgementTimer - dt);
+      if (this.judgementTimer <= 0) this.judgementVulnerability = 0;
+    }
+
     if (this.traits.includes("regen")) {
       this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.006 * dt);
     }
@@ -75,7 +94,7 @@ export class Enemy {
       if (this.slowTimer <= 0) this.slowPercent = 0;
     }
 
-    const speedMultiplier = this.slowTimer > 0 ? 1 - this.slowPercent : 1;
+    const speedMultiplier = this.rootTimer > 0 ? 0 : this.slowTimer > 0 ? 1 - this.slowPercent : 1;
     const previousX = this.x;
     const previousY = this.y;
     this.pathDistance += this.baseSpeed * speedMultiplier * dt;
@@ -102,7 +121,8 @@ export class Enemy {
   applyDamage(amount, damageType, game, sourceTower = null, showText = true) {
     if (!this.active) return 0;
     const multiplier = getAttackArmorMultiplier(damageType, this.armorType);
-    const finalDamage = Math.max(1, amount * multiplier - this.armor);
+    const damageTakenMultiplier = 1 + this.increasedDamageTaken + this.judgementVulnerability;
+    const finalDamage = Math.max(1, amount * multiplier - this.armor) * damageTakenMultiplier;
     this.hp -= finalDamage;
 
     if (showText && finalDamage >= 8) {
@@ -131,5 +151,22 @@ export class Enemy {
     if (dps <= 0 || duration <= 0) return;
     this.poisonDps = Math.max(this.poisonDps, dps);
     this.poisonTimer = Math.max(this.poisonTimer, duration);
+  }
+
+  applyRoot(duration) {
+    if (duration <= 0 || this.traits.includes("boss")) return;
+    this.rootTimer = Math.max(this.rootTimer, duration);
+  }
+
+  applyVulnerability(percent, duration) {
+    if (percent <= 0 || duration <= 0) return;
+    this.increasedDamageTaken = Math.max(this.increasedDamageTaken, percent);
+    this.vulnerabilityTimer = Math.max(this.vulnerabilityTimer, duration);
+  }
+
+  applyJudgement(percent, duration) {
+    if (percent <= 0 || duration <= 0) return;
+    this.judgementVulnerability = Math.max(this.judgementVulnerability, percent);
+    this.judgementTimer = Math.max(this.judgementTimer, duration);
   }
 }

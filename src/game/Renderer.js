@@ -123,6 +123,7 @@ export class Renderer {
 
   drawWorld(ctx, game) {
     this.drawMap(ctx, game);
+    this.drawCastleZones(ctx, game);
     this.drawRanges(ctx, game);
     this.drawTowers(ctx, game.towers);
     for (let i = 0; i < game.projectiles.length; i += 1) this.drawProjectile(ctx, game.projectiles[i]);
@@ -242,6 +243,24 @@ export class Renderer {
     ctx.strokeStyle = "rgba(188, 226, 255, 0.55)";
     ctx.lineWidth = 2;
     ctx.stroke();
+  }
+
+  drawCastleZones(ctx, game) {
+    const zones = game.castleSystem?.state?.activeZones || [];
+    for (let i = 0; i < zones.length; i += 1) {
+      const zone = zones[i];
+      ctx.save();
+      ctx.globalAlpha = Math.max(0.18, Math.min(0.36, zone.remaining / 4));
+      ctx.fillStyle = zone.type === "plague" ? "#7b5ba5" : "#84df79";
+      ctx.beginPath();
+      ctx.arc(zone.x, zone.y, zone.radius, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.72;
+      ctx.strokeStyle = zone.type === "plague" ? "#b9a0ff" : "#9cf08f";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   drawTower(ctx, tower) {
@@ -483,6 +502,7 @@ export class Renderer {
     ctx.fill();
     ctx.stroke();
 
+    this.drawEnemyStatus(ctx, enemy);
     this.drawEnemyHpBar(ctx, enemy, -enemy.radius - 10, enemy.radius * 2);
     ctx.restore();
     this.drawCalls += 1;
@@ -524,8 +544,42 @@ export class Renderer {
       ctx.stroke();
     }
 
+    this.drawEnemyStatus(ctx, enemy);
+
     this.drawEnemyHpBar(ctx, enemy, -drawHeight * anchorY - 7, Math.max(enemy.radius * 2, drawWidth * 0.54));
     return true;
+  }
+
+  drawEnemyStatus(ctx, enemy) {
+    if (enemy.poisonTimer > 0) {
+      ctx.strokeStyle = "#80df68";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, -enemy.radius * 0.15, enemy.radius * 1.35, 0, TAU);
+      ctx.stroke();
+    }
+    if (enemy.rootTimer > 0) {
+      ctx.strokeStyle = "#78b45f";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-enemy.radius * 1.1, enemy.radius * 0.65);
+      ctx.lineTo(enemy.radius * 1.1, enemy.radius * 0.65);
+      ctx.stroke();
+    }
+    if (enemy.vulnerabilityTimer > 0) {
+      ctx.strokeStyle = "#ff9c7a";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, enemy.radius * 1.55, 0, TAU);
+      ctx.stroke();
+    }
+    if (enemy.judgementTimer > 0) {
+      ctx.strokeStyle = "#ffe28f";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, -enemy.radius * 0.3, enemy.radius * 1.75, 0, TAU);
+      ctx.stroke();
+    }
   }
 
   drawEnemyHpBar(ctx, enemy, y, width) {

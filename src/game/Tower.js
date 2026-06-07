@@ -14,6 +14,12 @@ function cloneSpecial(special) {
   };
 }
 
+function applySpecialAdditions(special, additions = {}) {
+  for (const key of Object.keys(additions)) {
+    special[key] = (special[key] || 0) + additions[key];
+  }
+}
+
 function getBaseDamageRange(config) {
   const fallbackDamage = Number.isFinite(config.damage) ? config.damage : 0;
   return normalizeDamageRange(
@@ -65,36 +71,57 @@ export class Tower {
   }
 
   recalculateStats() {
-    this.range = this.config.range;
+    this.baseRange = this.config.range;
     const damageRange = getBaseDamageRange(this.config);
-    this.minDamage = damageRange.min;
-    this.maxDamage = damageRange.max;
-    this.fireRate = this.config.fireRate;
-    this.projectileSpeed = this.config.projectileSpeed;
+    this.baseMinDamage = damageRange.min;
+    this.baseMaxDamage = damageRange.max;
+    this.baseFireRate = this.config.fireRate;
+    this.baseProjectileSpeed = this.config.projectileSpeed;
     this.attackType = this.config.attackType;
     this.damageType = this.config.damageType;
-    this.special = cloneSpecial(this.config.special);
+    this.baseSpecial = cloneSpecial(this.config.special);
 
     for (let i = 0; i < this.level; i += 1) {
       const upgrade = this.config.upgrades[i];
-      this.range += upgrade.range || 0;
+      this.baseRange += upgrade.range || 0;
       addUpgradeDamage(damageRange, upgrade);
-      this.minDamage = damageRange.min;
-      this.maxDamage = damageRange.max;
-      this.fireRate += upgrade.fireRate || 0;
-      this.projectileSpeed += upgrade.projectileSpeed || 0;
+      this.baseMinDamage = damageRange.min;
+      this.baseMaxDamage = damageRange.max;
+      this.baseFireRate += upgrade.fireRate || 0;
+      this.baseProjectileSpeed += upgrade.projectileSpeed || 0;
       if (upgrade.special) {
         for (const key of Object.keys(upgrade.special)) {
-          this.special[key] = (this.special[key] || 0) + upgrade.special[key];
+          this.baseSpecial[key] = (this.baseSpecial[key] || 0) + upgrade.special[key];
         }
       }
     }
+    this.applyCastleModifiers(null);
+  }
+
+  applyCastleModifiers(game) {
+    const modifiers = game?.castleSystem?.getTowerModifiers(this) || {
+      damageMultiplier: 1,
+      fireRateMultiplier: 1,
+      rangeMultiplier: 1,
+      projectileSpeedMultiplier: 1,
+      cooldownMultiplier: 1,
+      specialAdditions: {},
+    };
+    this.range = this.baseRange * modifiers.rangeMultiplier;
+    this.minDamage = this.baseMinDamage * modifiers.damageMultiplier;
+    this.maxDamage = this.baseMaxDamage * modifiers.damageMultiplier;
+    this.fireRate = Math.max(0.05, this.baseFireRate * modifiers.fireRateMultiplier);
+    this.projectileSpeed = this.baseProjectileSpeed * modifiers.projectileSpeedMultiplier;
+    this.cooldownMultiplier = modifiers.cooldownMultiplier;
+    this.special = cloneSpecial(this.baseSpecial);
+    applySpecialAdditions(this.special, modifiers.specialAdditions);
     this.rangeSq = this.range * this.range;
     this.damage = (this.minDamage + this.maxDamage) * 0.5;
   }
 
   update(dt, game) {
     if (this.updateConstruction(dt)) return;
+    this.applyCastleModifiers(game);
 
     if (this.cooldown > 0) {
       this.cooldown = Math.max(0, this.cooldown - dt);
@@ -105,7 +132,7 @@ export class Tower {
     if (!target) return;
 
     this.attack(target, game);
-    this.cooldown = 1 / this.fireRate;
+    this.cooldown = (1 / this.fireRate) * this.cooldownMultiplier;
   }
 
   updateConstruction(dt) {
@@ -177,6 +204,7 @@ export class Tower {
 
     if (this.attackType === "instant") {
       target.applyDamage(damage, this.damageType, game, this);
+      this.applySpecialEffects(target, game);
       game.spawnEffect("beam", this.x, this.y, {
         x2: target.x,
         y2: target.y,
@@ -219,6 +247,7 @@ export class Tower {
       const enemy = targets[i];
       if (!enemy.active) continue;
       enemy.applyDamage(damage, this.damageType, game, this);
+      this.applySpecialEffects(enemy, game);
       game.spawnEffect("beam", this.x, this.y, {
         x2: enemy.x,
         y2: enemy.y,
@@ -228,6 +257,14 @@ export class Tower {
       damage *= this.special.chainFalloff || 0.7;
       hits += 1;
     }
+  }
+
+  applySpecialEffects(target, game = null) {
+    if (!target?.active) return;
+    if (this.special.slowPercent) target.applySlow(this.special.slowPercent, this.special.slowDuration || 1);
+    if (this.special.poisonDps) target.applyPoison(this.special.poisonDps, this.special.poisonDuration || 3);
+    const curse = game?.castleSystem?.getCastleStat("curseVulnerability", 0) || 0;
+    if (curse > 0 && target.hp / target.maxHp <= 0.55) target.applyVulnerability(curse, 3);
   }
 
   rollDamage() {

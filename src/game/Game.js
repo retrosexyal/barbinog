@@ -9,6 +9,7 @@ import { EventBus } from "../utils/EventBus.js";
 import { ObjectPool } from "../utils/ObjectPool.js";
 import { distanceSq } from "../utils/math.js";
 import { Camera } from "./Camera.js";
+import { CastleSystem } from "./CastleSystem.js";
 import { Effect } from "./Effects.js";
 import { Enemy } from "./Enemy.js";
 import { GameMap } from "./Map.js";
@@ -40,6 +41,7 @@ export class Game {
     this.yandex = new YandexSDK();
     this.storage = new Storage(this.yandex);
     this.leaderboard = new Leaderboard(this.yandex);
+    this.castleSystem = new CastleSystem(this);
     this.waveManager = new WaveManager(WAVES, this);
     this.input = null;
     this.loop = new Loop((dt) => this.update(dt), () => this.render());
@@ -68,6 +70,9 @@ export class Game {
     this.selectedTower = null;
     this.towerDropdownOpen = false;
     this.hoverTile = null;
+    this.castleSelectCompletedWave = 0;
+    this.talentPanelOpen = false;
+    this.pendingAbilityId = null;
     this.nextWaveAutoStartDelay = NEXT_WAVE_AUTO_START_DELAY;
     this.nextWaveCountdown = null;
     this.usedContinue = false;
@@ -93,6 +98,7 @@ export class Game {
     this.bestScore = this.savedData.bestScore || 0;
     this.baseTotalKills = this.savedData.totalKills || 0;
     this.unlockedTowers = this.savedData.unlockedTowers || this.unlockedTowers;
+    this.castleSystem.lastSelectedCastleId = this.savedData.lastSelectedCastleId || this.castleSystem.lastSelectedCastleId;
     this.input = new Input(this.canvas, this);
     this.yandex.onPauseResume((paused) => {
       if (paused) this.pauseFromSystem();
@@ -121,6 +127,10 @@ export class Game {
       this.updateEnemyAnimations(dt, "idle");
       this.updateEffects(dt);
       return;
+    }
+
+    if (this.isRunState() && this.state !== "paused") {
+      this.castleSystem.update(dt);
     }
 
     if (!this.isRunState() || this.state === "paused" || this.state === "waveComplete") {
@@ -165,6 +175,8 @@ export class Game {
     this.towerDropdownOpen = false;
     this.hoverTile = null;
     this.nextWaveCountdown = null;
+    this.talentPanelOpen = false;
+    this.pendingAbilityId = null;
     this.enemies.length = 0;
     this.projectiles.length = 0;
     this.effects.length = 0;
@@ -175,20 +187,30 @@ export class Game {
   }
 
   startNewGame() {
-    this.resetRun(0);
+    this.openCastleSelect(0);
+  }
+
+  loadSavedGame() {
+    this.openCastleSelect(this.savedData.completedWave || 0);
+  }
+
+  openCastleSelect(completedWave = 0) {
+    this.castleSelectCompletedWave = Math.max(0, completedWave);
+    this.resetRun(this.castleSelectCompletedWave);
+    this.state = "castleSelect";
+    this.yandex.gameplayStop();
+  }
+
+  selectCastle(castleId) {
+    this.resetRun(this.castleSelectCompletedWave || 0);
+    this.castleSystem.startRun(castleId);
     this.state = "playing";
     this.yandex.gameplayStart();
     this.saveProgress();
   }
 
-  loadSavedGame() {
-    this.resetRun(this.savedData.completedWave || 0);
-    this.state = "playing";
-    this.yandex.gameplayStart();
-  }
-
   startWave() {
-    if (this.state === "menu" || this.state === "paused" || this.state === "gameOver" || this.state === "victory" || this.waveManager.running) return;
+    if (this.state === "menu" || this.state === "castleSelect" || this.state === "paused" || this.state === "gameOver" || this.state === "victory" || this.waveManager.running) return;
     if (this.state === "waveComplete") this.state = "playing";
     if (!this.waveManager.hasMoreWaves()) {
       this.victory();
@@ -218,7 +240,7 @@ export class Game {
   }
 
   togglePause() {
-    if (this.state === "menu" || this.state === "gameOver" || this.state === "victory" || this.state === "leaderboard") return;
+    if (this.state === "menu" || this.state === "castleSelect" || this.state === "gameOver" || this.state === "victory" || this.state === "leaderboard") return;
     if (this.state === "paused") {
       this.state = this.previousState === "paused" ? "playing" : this.previousState;
       this.yandex.gameplayStart();
@@ -240,8 +262,14 @@ export class Game {
   handleUIAction(action, meta) {
     if (action === "newGame") this.startNewGame();
     else if (action === "loadGame") this.loadSavedGame();
+    else if (action === "selectCastle") this.selectCastle(meta.castleId);
     else if (action === "startWave") this.startWave();
     else if (action === "pause") this.togglePause();
+    else if (action === "talents") this.talentPanelOpen = true;
+    else if (action === "closeTalents") this.talentPanelOpen = false;
+    else if (action === "unlockTalent") this.castleSystem.unlockTalent(meta.talentId);
+    else if (action === "activeAbility") this.useCastleAbility(meta.abilityId);
+    else if (action === "cancelAbility") this.pendingAbilityId = null;
     else if (action === "toggleTowerDropdown") this.towerDropdownOpen = !this.towerDropdownOpen;
     else if (action === "selectTowerType") {
       this.selectTowerType(meta.typeId);
@@ -255,6 +283,11 @@ export class Game {
   }
 
   handleMapClick(tileX, tileY, worldX = null, worldY = null) {
+    if (this.pendingAbilityId && Number.isFinite(worldX) && Number.isFinite(worldY)) {
+      this.castleSystem.castAbility(this.pendingAbilityId, { x: worldX, y: worldY });
+      return;
+    }
+
     const towerAtPointer =
       Number.isFinite(worldX) && Number.isFinite(worldY) ? this.renderer.hitTestTowerAt(this.towers, worldX, worldY) : null;
     const tower = towerAtPointer || this.getTowerAtTile(tileX, tileY);
@@ -272,6 +305,13 @@ export class Game {
         this.selectedTowerType = null;
       }
     }
+  }
+
+  useCastleAbility(abilityId) {
+    if (!this.isRunState() || this.state === "paused" || this.state === "gameOver" || this.state === "victory") return false;
+    const result = this.castleSystem.castAbility(abilityId);
+    if (!result.ok && this.pendingAbilityId === abilityId) this.pendingAbilityId = null;
+    return result.ok;
   }
 
   selectTowerType(typeId) {
@@ -452,6 +492,7 @@ export class Game {
   enemyKilled(enemy, tower) {
     this.gold += enemy.rewardGold;
     this.kills += 1;
+    this.castleSystem.onEnemyKilled(enemy, tower);
     this.spawnEffect("ring", enemy.x, enemy.y, { radius: enemy.radius + 12, color: "#ffd564", duration: 0.25 });
     this.recalculateScore();
     this.events.emit("enemyKilled", { enemy, tower });
@@ -459,7 +500,9 @@ export class Game {
   }
 
   enemyReachedBase(enemy) {
-    this.lives = Math.max(0, this.lives - enemy.damageToBase);
+    const reduction = this.castleSystem.getCastleStat("baseDamageReduction", 0);
+    const damageToBase = Math.max(1, Math.ceil(enemy.damageToBase * (1 - reduction)));
+    this.lives = Math.max(0, this.lives - damageToBase);
     this.spawnEffect("ring", enemy.x, enemy.y, { radius: 42, color: "#ef6158", duration: 0.45 });
     this.recalculateScore();
     this.events.emit("livesChanged", this.lives);
@@ -503,6 +546,9 @@ export class Game {
       completedWave: this.completedWave,
       unlockedTowers: this.unlockedTowers,
       totalKills: this.baseTotalKills + this.kills,
+      lastSelectedCastleId: this.castleSystem.lastSelectedCastleId,
+      castleMastery: this.savedData.castleMastery || {},
+      unlockedCastles: this.savedData.unlockedCastles || ["human", "elf", "undead"],
     });
     if (immediate) this.storage.flush();
     if (this.score >= this.bestScore) this.leaderboard.submitScore(this.score);

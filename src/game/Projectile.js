@@ -73,5 +73,15 @@ export class Projectile {
     if (this.attackType === "slow") {
       this.target.applySlow(this.special.slowPercent, this.special.slowDuration);
     }
+    if (this.target.active && this.special.poisonDps) {
+      this.target.applyPoison(this.special.poisonDps, this.special.poisonDuration);
+    }
+    if (this.target.active && this.special.slowPercent && this.attackType !== "slow") {
+      this.target.applySlow(this.special.slowPercent, this.special.slowDuration || 1);
+    }
+    const curse = game.castleSystem?.getCastleStat("curseVulnerability", 0) || 0;
+    if (this.target.active && curse > 0 && this.target.hp / this.target.maxHp <= 0.55) {
+      this.target.applyVulnerability(curse, 3);
+    }
   }
 }

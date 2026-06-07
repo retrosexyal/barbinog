@@ -117,6 +117,15 @@ function getStartWaveLabel(game) {
   return "Start Wave";
 }
 
+function formatCooldown(seconds) {
+  return seconds > 0 ? `${Math.ceil(seconds)}s` : "Ready";
+}
+
+function getCastleXpRatio(castleState) {
+  if (!castleState) return 0;
+  return clamp(castleState.xp / Math.max(1, castleState.xpToNextLevel), 0, 1);
+}
+
 export class UI {
   constructor() {
     this.buttons = [];
@@ -171,14 +180,19 @@ export class UI {
 
     if (game.isRunState()) {
       this.drawGamePanel(ctx, game);
+      this.drawCastleHud(ctx, game);
+      this.drawAbilityHud(ctx, game);
+      this.drawTargetingHint(ctx, game);
     }
 
     if (game.state === "menu") this.drawMenu(ctx, game);
+    if (game.state === "castleSelect") this.drawCastleSelect(ctx, game);
     if (game.state === "paused") this.drawCenteredOverlay(ctx, "Paused", "Resume", "pause");
     if (game.state === "waveComplete") this.drawWaveComplete(ctx, game);
     if (game.state === "gameOver") this.drawEndScreen(ctx, game, "Game Over");
     if (game.state === "victory") this.drawEndScreen(ctx, game, "Victory");
     if (game.state === "leaderboard") this.drawLeaderboard(ctx, game);
+    if (game.talentPanelOpen) this.drawTalentPanel(ctx, game);
   }
 
   drawButton(ctx, button) {
@@ -731,6 +745,240 @@ export class UI {
       });
       this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
       this.addButton("sellTower", { x: x + w - sellW - 10, y: buttonY, w: sellW, h: 28 }, `Sell ${tower.sellValue()}`, { kind: "danger" });
+      this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    }
+  }
+
+  drawCastleHud(ctx, game) {
+    const castleState = game.castleSystem?.state;
+    const castle = game.castleSystem?.selectedCastle;
+    if (!castleState || !castle) return;
+
+    const play = game.camera.playRect;
+    const width = Math.min(292, Math.max(210, play.w - 24));
+    const rect = { x: play.x + 12, y: play.y + 12, w: width, h: 88 };
+    this.addBlockingRect(rect);
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
+    ctx.fillStyle = "rgba(28, 22, 16, 0.94)";
+    ctx.fill();
+    drawPanelTexture(ctx, rect, rect.w + rect.h, 0.12);
+    ctx.strokeStyle = "rgba(255, 226, 154, 0.34)";
+    ctx.stroke();
+
+    ctx.fillStyle = castle.color;
+    ctx.beginPath();
+    ctx.arc(rect.x + 23, rect.y + 24, 14, 0, Math.PI * 2);
+    ctx.fill();
+    drawFittedText(ctx, castle.icon, rect.x + 23, rect.y + 24, 16, 15, "#1b1711", "center", "800");
+    drawFittedText(ctx, castle.name, rect.x + 46, rect.y + 18, rect.w - 130, 15, "#f7edd5", "left");
+    drawFittedText(ctx, `Lv.${castleState.level}`, rect.x + rect.w - 74, rect.y + 18, 64, 15, "#ffd564", "right");
+
+    const bar = { x: rect.x + 12, y: rect.y + 45, w: rect.w - 24, h: 10 };
+    roundRect(ctx, bar.x, bar.y, bar.w, bar.h, 5);
+    ctx.fillStyle = "#17110d";
+    ctx.fill();
+    roundRect(ctx, bar.x, bar.y, bar.w * getCastleXpRatio(castleState), bar.h, 5);
+    ctx.fillStyle = castle.color;
+    ctx.fill();
+    drawFittedText(ctx, `${castleState.xp}/${castleState.xpToNextLevel} XP`, rect.x + 12, rect.y + 67, 120, 11, "#cdbb91", "left", "600");
+    drawFittedText(ctx, `TP ${castleState.talentPoints}`, rect.x + 134, rect.y + 67, 54, 11, "#fff0b8", "left", "700");
+    if (castleState.uniqueResource) {
+      drawFittedText(
+        ctx,
+        `${castleState.uniqueResource.label} ${castleState.uniqueResource.amount}`,
+        rect.x + rect.w - 70,
+        rect.y + 67,
+        58,
+        11,
+        "#d9c6ff",
+        "right",
+        "700",
+      );
+    }
+
+    this.addButton("talents", { x: rect.x + rect.w - 82, y: rect.y + 57, w: 70, h: 24 }, "Talents", { kind: castleState.talentPoints > 0 ? "gold" : "default" });
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+  }
+
+  drawAbilityHud(ctx, game) {
+    const castleState = game.castleSystem?.state;
+    const castle = game.castleSystem?.selectedCastle;
+    if (!castleState || !castle) return;
+
+    const play = game.camera.playRect;
+    const narrow = play.w < 620;
+    const width = narrow ? Math.min(292, play.w - 24) : 236;
+    const x = narrow ? play.x + 12 : play.x + play.w - width - 12;
+    const y = narrow ? play.y + 108 : play.y + 12;
+    const rowH = 34;
+    const rect = { x, y, w: width, h: 12 + castle.abilities.length * (rowH + 6) };
+    this.addBlockingRect(rect);
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
+    ctx.fillStyle = "rgba(26, 20, 15, 0.94)";
+    ctx.fill();
+    drawPanelTexture(ctx, rect, rect.x + rect.y, 0.12);
+    ctx.strokeStyle = "rgba(255, 226, 154, 0.3)";
+    ctx.stroke();
+
+    for (let i = 0; i < castle.abilities.length; i += 1) {
+      const ability = castle.abilities[i];
+      const cooldown = castleState.activeCooldowns[ability.id] || 0;
+      const cost = ability.soulsCost || 0;
+      const resource = castleState.uniqueResource;
+      const canPay = !cost || (resource?.amount || 0) >= cost;
+      const enabled = cooldown <= 0 && canPay && game.state !== "paused";
+      const costText = cost ? ` ${cost}${resource?.label?.[0] || ""}` : "";
+      const label = `${ability.icon} ${cooldown > 0 ? formatCooldown(cooldown) : ability.name}${costText}`;
+      const buttonRect = { x: rect.x + 8, y: rect.y + 8 + i * (rowH + 6), w: rect.w - 16, h: rowH };
+      this.addButton("activeAbility", buttonRect, label, {
+        meta: { abilityId: ability.id },
+        enabled,
+        kind: game.pendingAbilityId === ability.id ? "gold" : "primary",
+      });
+      this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    }
+  }
+
+  drawTargetingHint(ctx, game) {
+    if (!game.pendingAbilityId) return;
+    const castle = game.castleSystem?.selectedCastle;
+    const ability = castle?.abilities.find((item) => item.id === game.pendingAbilityId);
+    const play = game.camera.playRect;
+    const rect = { x: play.x + play.w * 0.5 - 150, y: play.y + 14, w: 300, h: 42 };
+    this.addBlockingRect(rect);
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
+    ctx.fillStyle = "rgba(24, 18, 14, 0.95)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 226, 154, 0.45)";
+    ctx.stroke();
+    drawFittedText(ctx, `${ability?.name || "Ability"}: click map`, rect.x + 12, rect.y + 21, rect.w - 88, 14, "#f7edd5", "left");
+    this.addButton("cancelAbility", { x: rect.x + rect.w - 72, y: rect.y + 8, w: 60, h: 26 }, "Cancel");
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+  }
+
+  drawCastleSelect(ctx, game) {
+    this.drawScrim(ctx, 0.66);
+    const castles = game.castleSystem.selectableCastles;
+    const w = Math.min(900, this.lastWidth - 32);
+    const x = (this.lastWidth - w) * 0.5;
+    const y = Math.max(34, this.lastHeight * 0.1);
+    drawFittedText(ctx, "Choose Your Castle", this.lastWidth * 0.5, y, w, 38, "#f7edd5", "center");
+    drawFittedText(ctx, "Castle talents reset each run", this.lastWidth * 0.5, y + 38, w, 15, "#cdbb91", "center", "600");
+
+    const gap = 14;
+    const columns = this.lastWidth < 720 ? 1 : 3;
+    const cardW = columns === 1 ? Math.min(420, w) : (w - gap * 2) / 3;
+    const cardH = columns === 1 ? 146 : 246;
+    const startX = columns === 1 ? (this.lastWidth - cardW) * 0.5 : x;
+    for (let i = 0; i < castles.length; i += 1) {
+      const castle = castles[i];
+      const col = columns === 1 ? 0 : i;
+      const row = columns === 1 ? i : 0;
+      const rect = { x: startX + col * (cardW + gap), y: y + 74 + row * (cardH + gap), w: cardW, h: cardH };
+      const last = game.castleSystem.lastSelectedCastleId === castle.id;
+      this.drawCastleCard(ctx, castle, rect, last);
+      const buttonH = 36;
+      this.addButton("selectCastle", { x: rect.x + 14, y: rect.y + rect.h - buttonH - 12, w: rect.w - 28, h: buttonH }, last ? "Select Again" : "Select", {
+        meta: { castleId: castle.id },
+        kind: last ? "gold" : "primary",
+      });
+      this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    }
+  }
+
+  drawCastleCard(ctx, castle, rect, highlighted) {
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fillStyle = highlighted ? "rgba(60, 45, 25, 0.96)" : "rgba(31, 24, 18, 0.96)";
+    ctx.fill();
+    drawPanelTexture(ctx, rect, rect.x + rect.y, 0.16);
+    ctx.strokeStyle = highlighted ? castle.color : "rgba(255, 226, 154, 0.28)";
+    ctx.lineWidth = highlighted ? 3 : 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = castle.color;
+    ctx.beginPath();
+    ctx.arc(rect.x + 34, rect.y + 34, 20, 0, Math.PI * 2);
+    ctx.fill();
+    drawFittedText(ctx, castle.icon, rect.x + 34, rect.y + 34, 20, 19, "#17110d", "center", "800");
+    drawFittedText(ctx, castle.name, rect.x + 66, rect.y + 24, rect.w - 82, 18, "#f7edd5", "left");
+    drawFittedText(ctx, castle.title, rect.x + 66, rect.y + 48, rect.w - 82, 12, "#cdbb91", "left", "600");
+    drawFittedText(ctx, castle.description, rect.x + 16, rect.y + 84, rect.w - 32, 13, "#e7dbc0", "left", "600");
+    drawFittedText(ctx, `Strong: ${castle.strength}`, rect.x + 16, rect.y + 122, rect.w - 32, 12, "#b8e6a8", "left", "600");
+    drawFittedText(ctx, `Weak: ${castle.weakness}`, rect.x + 16, rect.y + 148, rect.w - 32, 12, "#e8b0a0", "left", "600");
+    if (rect.h > 190) {
+      drawFittedText(ctx, castle.uniqueMechanic, rect.x + 16, rect.y + 180, rect.w - 32, 12, "#d8d4ca", "left", "600");
+    }
+  }
+
+  drawTalentPanel(ctx, game) {
+    const castleState = game.castleSystem?.state;
+    const castle = game.castleSystem?.selectedCastle;
+    if (!castleState || !castle) return;
+    this.drawScrim(ctx, 0.64);
+    const rect = {
+      x: Math.max(12, (this.lastWidth - Math.min(980, this.lastWidth - 24)) * 0.5),
+      y: Math.max(14, (this.lastHeight - Math.min(660, this.lastHeight - 28)) * 0.5),
+      w: Math.min(980, this.lastWidth - 24),
+      h: Math.min(660, this.lastHeight - 28),
+    };
+    this.addBlockingRect({ x: 0, y: 0, w: this.lastWidth, h: this.lastHeight });
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fillStyle = "#1d1914";
+    ctx.fill();
+    drawPanelTexture(ctx, rect, rect.w, 0.14);
+    ctx.strokeStyle = "rgba(255, 226, 154, 0.38)";
+    ctx.stroke();
+
+    drawFittedText(ctx, `${castle.name} Talents`, rect.x + 24, rect.y + 30, rect.w - 220, 24, "#f7edd5", "left");
+    drawFittedText(ctx, `Level ${castleState.level}  Points ${castleState.talentPoints}`, rect.x + 24, rect.y + 58, 260, 14, "#ffd564", "left", "700");
+    this.addButton("closeTalents", { x: rect.x + rect.w - 92, y: rect.y + 18, w: 70, h: 32 }, "Close");
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+
+    const columns = this.lastWidth < 760 ? 1 : 3;
+    const gap = 10;
+    const branchW = columns === 1 ? rect.w - 32 : (rect.w - 44 - gap * 2) / 3;
+    const branchH = columns === 1 ? 164 : rect.h - 104;
+    const top = rect.y + 84;
+    for (let i = 0; i < castle.branches.length; i += 1) {
+      const branchConfig = castle.branches[i];
+      const bx = columns === 1 ? rect.x + 16 : rect.x + 22 + i * (branchW + gap);
+      const by = columns === 1 ? top + i * (branchH + gap) : top;
+      this.drawTalentBranch(ctx, game, branchConfig, bx, by, branchW, branchH);
+    }
+  }
+
+  drawTalentBranch(ctx, game, branchConfig, x, y, w, h) {
+    const castleState = game.castleSystem.state;
+    roundRect(ctx, x, y, w, h, 6);
+    ctx.fillStyle = "rgba(20, 15, 11, 0.86)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 226, 154, 0.2)";
+    ctx.stroke();
+    drawFittedText(ctx, branchConfig.name, x + 12, y + 20, w - 24, 17, "#fff0b8", "left");
+
+    const rowH = Math.max(24, Math.min(72, (h - 42) / branchConfig.talents.length));
+    for (let i = 0; i < branchConfig.talents.length; i += 1) {
+      const talentConfig = branchConfig.talents[i];
+      const unlocked = castleState.unlockedTalentIds.includes(talentConfig.id);
+      const canUnlock = game.castleSystem.canUnlockTalent(talentConfig.id);
+      const row = { x: x + 8, y: y + 34 + i * rowH, w: w - 16, h: rowH - 5 };
+      roundRect(ctx, row.x, row.y, row.w, row.h, 5);
+      ctx.fillStyle = unlocked ? "rgba(92, 74, 38, 0.78)" : canUnlock ? "rgba(53, 43, 30, 0.9)" : "rgba(35, 31, 27, 0.74)";
+      ctx.fill();
+      ctx.strokeStyle = unlocked ? "#ffd564" : "rgba(255, 226, 154, 0.16)";
+      ctx.stroke();
+
+      const buttonW = Math.min(70, row.w * 0.28);
+      const titleWidth = row.w - buttonW - 18;
+      drawFittedText(ctx, `${talentConfig.final ? "*" : ""}${talentConfig.name}`, row.x + 8, row.y + 13, titleWidth, 12, unlocked ? "#fff0b8" : "#f7edd5", "left", "700");
+      drawFittedText(ctx, talentConfig.description, row.x + 8, row.y + Math.min(row.h - 10, 34), titleWidth, 10, "#cdbb91", "left", "600");
+
+      const label = unlocked ? "Owned" : `Unlock ${talentConfig.cost}`;
+      this.addButton("unlockTalent", { x: row.x + row.w - buttonW - 6, y: row.y + (row.h - 24) * 0.5, w: buttonW, h: 24 }, label, {
+        meta: { talentId: talentConfig.id },
+        enabled: canUnlock,
+        kind: canUnlock ? "gold" : "default",
+      });
       this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
     }
   }

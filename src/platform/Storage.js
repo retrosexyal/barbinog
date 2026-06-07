@@ -1,11 +1,14 @@
 const STORAGE_KEY = "forest-gate-defense-save";
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;
 
 const DEFAULT_DATA = Object.freeze({
   version: SAVE_VERSION,
   bestScore: 0,
   completedWave: 0,
   unlockedTowers: ["archer", "cannon", "frost", "magic", "sentinel"],
+  unlockedCastles: ["human", "elf", "undead"],
+  lastSelectedCastleId: "human",
+  castleMastery: {},
   settings: { sound: true },
   totalKills: 0,
   lastSaveTime: 0,
@@ -15,7 +18,13 @@ export class Storage {
   constructor(yandexSDK) {
     this.yandexSDK = yandexSDK;
     this.player = null;
-    this.cache = { ...DEFAULT_DATA, settings: { ...DEFAULT_DATA.settings }, unlockedTowers: [...DEFAULT_DATA.unlockedTowers] };
+    this.cache = {
+      ...DEFAULT_DATA,
+      settings: { ...DEFAULT_DATA.settings },
+      unlockedTowers: [...DEFAULT_DATA.unlockedTowers],
+      unlockedCastles: [...DEFAULT_DATA.unlockedCastles],
+      castleMastery: { ...DEFAULT_DATA.castleMastery },
+    };
     this.saveTimer = 0;
     this.pending = false;
   }
@@ -50,7 +59,13 @@ export class Storage {
 
   migrate(data) {
     if (!data || typeof data !== "object") {
-      return { ...DEFAULT_DATA, settings: { ...DEFAULT_DATA.settings }, unlockedTowers: [...DEFAULT_DATA.unlockedTowers] };
+      return {
+        ...DEFAULT_DATA,
+        settings: { ...DEFAULT_DATA.settings },
+        unlockedTowers: [...DEFAULT_DATA.unlockedTowers],
+        unlockedCastles: [...DEFAULT_DATA.unlockedCastles],
+        castleMastery: { ...DEFAULT_DATA.castleMastery },
+      };
     }
     return {
       ...DEFAULT_DATA,
@@ -58,6 +73,9 @@ export class Storage {
       version: SAVE_VERSION,
       settings: { ...DEFAULT_DATA.settings, ...(data.settings || {}) },
       unlockedTowers: Array.isArray(data.unlockedTowers) ? data.unlockedTowers : [...DEFAULT_DATA.unlockedTowers],
+      unlockedCastles: Array.isArray(data.unlockedCastles) ? data.unlockedCastles : [...DEFAULT_DATA.unlockedCastles],
+      castleMastery: data.castleMastery && typeof data.castleMastery === "object" ? data.castleMastery : {},
+      lastSelectedCastleId: data.lastSelectedCastleId || DEFAULT_DATA.lastSelectedCastleId,
     };
   }
 
