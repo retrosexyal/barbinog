@@ -223,6 +223,7 @@ export class UI {
     if (game.isRunState()) {
       this.drawGamePanel(ctx, game);
       this.drawCastleHud(ctx, game);
+      this.drawAbilityHud(ctx, game);
       this.drawTargetingHint(ctx, game);
     }
 
@@ -590,25 +591,12 @@ export class UI {
     const tight = panel.h < 150;
     const gap = tight ? 4 : 6;
     const selectorH = tight ? 30 : 34;
-    const actionH = tight ? 36 : 40;
     const selectorY = panel.y + pad;
     const selectedY = selectorY + selectorH + gap;
-    const actionY = panel.y + panel.h - pad - actionH;
-    const selectedH = Math.max(38, actionY - selectedY - gap);
+    const selectedH = Math.max(38, panel.y + panel.h - pad - selectedY);
 
     this.drawTowerDropdown(ctx, game, panel.x + pad, selectorY, panel.w - pad * 2, selectorH, tight);
     this.drawCompactSelectedPanel(ctx, game, panel.x + pad, selectedY, panel.w - pad * 2, selectedH);
-
-    const startRect = { x: panel.x + pad, y: actionY, w: panel.w - pad * 2 - 88, h: actionH };
-    this.addButton("startWave", startRect, getStartWaveLabel(game), {
-      enabled: !game.waveManager.running && game.state !== "paused" && game.waveManager.hasMoreWaves(),
-      kind: "primary",
-    });
-    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
-
-    const pauseRect = { x: startRect.x + startRect.w + 8, y: startRect.y, w: 80, h: actionH };
-    this.addButton("pause", pauseRect, game.state === "paused" ? "Resume" : "Pause");
-    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
   }
 
   drawPortraitStatsBar(ctx, game, rect) {
@@ -632,7 +620,57 @@ export class UI {
     this.drawMiniStat(ctx, rect.x + pad, y, statW, statH, "Gold", formatCompact(game.gold), "#ffd564");
     this.drawMiniStat(ctx, rect.x + pad + (statW + gap), y, statW, statH, "Lives", `${game.lives}/20`, "#ff7669");
     this.drawMiniStat(ctx, rect.x + pad + (statW + gap) * 2, y, statW, statH, "Wave", `${game.completedWave}/${game.totalWaves}`, "#d8d4ca");
-    this.drawMiniStat(ctx, rect.x + pad + (statW + gap) * 3, y, statW, statH, "Best", formatCompact(game.bestScore), "#9ee3ff");
+    const menuRect = { x: rect.x + pad + (statW + gap) * 3, y, w: statW, h: statH };
+    this.addButton("toggleActionsMenu", menuRect, game.actionsMenuOpen ? "Close" : "Menu", { kind: game.actionsMenuOpen ? "gold" : "default" });
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    if (game.actionsMenuOpen) this.drawPortraitActionsMenu(ctx, game, menuRect);
+  }
+
+  drawPortraitActionsMenu(ctx, game, anchorRect) {
+    const rowH = 34;
+    const gap = 4;
+    const pad = 6;
+    const menuW = Math.min(196, Math.max(154, this.lastWidth * 0.48));
+    const x = clamp(anchorRect.x + anchorRect.w - menuW, 6, this.lastWidth - menuW - 6);
+    const y = anchorRect.y + anchorRect.h + 6;
+    const items = [
+      {
+        action: "startWave",
+        label: getStartWaveLabel(game),
+        enabled: !game.waveManager.running && game.state !== "paused" && game.waveManager.hasMoreWaves(),
+        kind: "primary",
+      },
+      {
+        action: "pause",
+        label: game.state === "paused" ? "Resume" : "Pause",
+        enabled: game.state !== "menu" && game.state !== "castleSelect",
+        kind: "default",
+      },
+      {
+        action: "leaderboard",
+        label: `Leaderboard ${formatCompact(game.bestScore)}`,
+        enabled: true,
+        kind: "default",
+      },
+    ];
+    const rect = { x, y, w: menuW, h: pad * 2 + items.length * rowH + (items.length - 1) * gap };
+    this.addBlockingRect(rect);
+
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
+    ctx.fillStyle = "rgba(34, 25, 18, 0.98)";
+    ctx.fill();
+    drawPanelTexture(ctx, rect, rect.w + rect.h, 0.16);
+    ctx.strokeStyle = "rgba(255, 238, 190, 0.38)";
+    ctx.stroke();
+
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
+      this.addButton(item.action, { x: x + pad, y: y + pad + i * (rowH + gap), w: menuW - pad * 2, h: rowH }, item.label, {
+        enabled: item.enabled,
+        kind: item.kind,
+      });
+      this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    }
   }
 
   drawStat(ctx, x, y, w, label, value, color) {
@@ -787,16 +825,13 @@ export class UI {
     drawFittedText(ctx, `Castle Lv.${castleState.level}`, x + iconR * 2 + 24, y + (compact ? 36 : 46), w - iconR * 2 - 34, compact ? 11 : 12, "#ffd564", "left", "700");
 
     if (compact) {
-      const resource = getCastleResource(castleState);
-      const summaryY = y + Math.min(h - 18, 58);
-      drawFittedText(ctx, `XP ${castleState.xp}/${castleState.xpToNextLevel}`, x + 10, summaryY, w * 0.48, 11, "#cdbb91", "left", "600");
-      drawFittedText(ctx, `${resource.label} ${resource.max ? `${resource.amount}/${resource.max}` : resource.amount}`, x + w - 10, summaryY, w * 0.48, 11, "#d9c6ff", "right", "700");
-      const rowH = 28;
-      const startY = y + 72;
-      const maxRows = Math.min(castle.abilities.length, Math.floor((y + h - startY) / (rowH + 4)));
-      for (let i = 0; i < maxRows; i += 1) {
-        this.drawAbilityRow(ctx, game, castle.abilities[i], { x: x + 8, y: startY + i * (rowH + 4), w: w - 16, h: rowH }, true);
-      }
+      const talentW = Math.min(104, Math.max(82, w * 0.34));
+      const buttonH = 28;
+      const buttonY = y + Math.max(50, h - buttonH - 10);
+      this.addButton("talents", { x: x + w - talentW - 10, y: buttonY, w: talentW, h: buttonH }, "Talents", {
+        kind: castleState.talentPoints > 0 ? "gold" : "default",
+      });
+      this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
       return;
     }
 
@@ -813,17 +848,6 @@ export class UI {
     });
     this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
     drawFittedText(ctx, `Points ${castleState.talentPoints}`, x + 12, y + 118, w - talentW - 28, 12, "#fff0b8", "left", "700");
-
-    const titleY = y + 152;
-    drawFittedText(ctx, "Abilities", x + 12, titleY, w - 24, 13, "#cdbb91", "left", "700");
-    const rowGap = 8;
-    const rowH = Math.max(46, Math.min(64, (h - titleY + y - 16 - rowGap * Math.max(0, castle.abilities.length - 1)) / Math.max(1, castle.abilities.length)));
-    for (let i = 0; i < castle.abilities.length; i += 1) {
-      const ability = castle.abilities[i];
-      const row = { x: x + 10, y: titleY + 14 + i * (rowH + rowGap), w: w - 20, h: rowH };
-      if (row.y + row.h > y + h - 8) break;
-      this.drawAbilityRow(ctx, game, ability, row, false);
-    }
   }
 
   drawAbilityRow(ctx, game, ability, rect, compact) {
@@ -1001,8 +1025,9 @@ export class UI {
     const play = game.camera.playRect;
     const base = game.map.tileCenter(game.map.basePosition.x, game.map.basePosition.y);
     const screen = game.camera.worldToScreen(base.x + game.map.tileSize * 0.12, base.y - game.map.tileSize * 3.55);
-    const width = Math.min(190, Math.max(142, play.w - 18));
-    const height = 32;
+    const castleScreenWidth = 170 * game.camera.scale;
+    const width = Math.max(64, Math.min(132, play.w - 18, castleScreenWidth));
+    const height = 28;
     const rect = {
       x: clamp(screen.x - width * 0.5, play.x + 8, play.x + play.w - width - 8),
       y: clamp(screen.y, play.y + 8, play.y + play.h - height - 8),
@@ -1020,8 +1045,11 @@ export class UI {
     ctx.stroke();
 
     const resource = getCastleResource(castleState);
-    this.drawProgressBar(ctx, { x: rect.x + 7, y: rect.y + 6, w: rect.w - 14, h: 8 }, getCastleXpRatio(castleState), castle.color, `XP ${castleState.xp}/${castleState.xpToNextLevel}`);
-    this.drawProgressBar(ctx, { x: rect.x + 7, y: rect.y + 18, w: rect.w - 14, h: 8 }, getCastleResourceRatio(castleState), "#8f70ff", `Mana ${resource.amount}/${resource.max}`);
+    const portrait = game.camera.height > game.camera.width;
+    const xpLabel = portrait ? "" : `XP ${castleState.xp}/${castleState.xpToNextLevel}`;
+    const resourceLabel = portrait ? "" : `Mana ${resource.amount}/${resource.max}`;
+    this.drawProgressBar(ctx, { x: rect.x + 6, y: rect.y + 5, w: rect.w - 12, h: 7 }, getCastleXpRatio(castleState), castle.color, xpLabel);
+    this.drawProgressBar(ctx, { x: rect.x + 6, y: rect.y + 16, w: rect.w - 12, h: 7 }, getCastleResourceRatio(castleState), "#8f70ff", resourceLabel);
   }
 
   drawAbilityHud(ctx, game) {
@@ -1030,12 +1058,38 @@ export class UI {
     if (!castleState || !castle) return;
 
     const play = game.camera.playRect;
-    const narrow = play.w < 620;
-    const width = narrow ? Math.min(292, play.w - 24) : 236;
-    const x = narrow ? play.x + 12 : play.x + play.w - width - 12;
-    const y = narrow ? play.y + 108 : play.y + 12;
+    const mapRect = {
+      x: game.camera.x,
+      y: game.camera.y,
+      w: game.camera.worldWidth * game.camera.scale,
+      h: game.camera.worldHeight * game.camera.scale,
+    };
+    const buttonRect = {
+      x: clamp(mapRect.x + 10, play.x + 8, play.x + play.w - 112),
+      y: clamp(mapRect.y + mapRect.h - 42, play.y + 8, play.y + play.h - 42),
+      w: Math.min(132, Math.max(104, play.w * 0.28)),
+      h: 32,
+    };
+    this.addBlockingRect(buttonRect);
+    this.addButton("toggleAbilityMenu", buttonRect, game.abilityMenuOpen ? "Close" : "Abilities", {
+      enabled: game.state !== "gameOver" && game.state !== "victory",
+      kind: game.abilityMenuOpen ? "gold" : "default",
+    });
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+
+    if (!game.abilityMenuOpen) return;
+
     const rowH = 34;
-    const rect = { x, y, w: width, h: 12 + castle.abilities.length * (rowH + 6) };
+    const gap = 6;
+    const pad = 8;
+    const width = Math.min(260, Math.max(210, play.w * 0.45));
+    const height = pad * 2 + castle.abilities.length * rowH + Math.max(0, castle.abilities.length - 1) * gap;
+    const rect = {
+      x: clamp(buttonRect.x, play.x + 8, play.x + play.w - width - 8),
+      y: Math.max(play.y + 8, buttonRect.y - height - 6),
+      w: width,
+      h: height,
+    };
     this.addBlockingRect(rect);
     roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
     ctx.fillStyle = "rgba(26, 20, 15, 0.94)";
@@ -1052,8 +1106,8 @@ export class UI {
       const enabled = game.castleSystem?.canCastAbility(ability.id) && game.state !== "paused";
       const costText = [cost ? `${cost}M` : "", soulCost ? `${soulCost}S` : ""].filter(Boolean).join(" ");
       const label = `${ability.icon} ${cooldown > 0 ? formatCooldown(cooldown) : ability.name}${costText ? ` ${costText}` : ""}`;
-      const buttonRect = { x: rect.x + 8, y: rect.y + 8 + i * (rowH + 6), w: rect.w - 16, h: rowH };
-      this.addButton("activeAbility", buttonRect, label, {
+      const abilityRect = { x: rect.x + pad, y: rect.y + pad + i * (rowH + gap), w: rect.w - pad * 2, h: rowH };
+      this.addButton("activeAbility", abilityRect, label, {
         meta: { abilityId: ability.id },
         enabled,
         kind: game.pendingAbilityId === ability.id ? "gold" : "primary",

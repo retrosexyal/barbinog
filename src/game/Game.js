@@ -71,6 +71,8 @@ export class Game {
     this.selectedEnemy = null;
     this.selectedCastle = false;
     this.towerDropdownOpen = false;
+    this.actionsMenuOpen = false;
+    this.abilityMenuOpen = false;
     this.hoverTile = null;
     this.castleSelectCompletedWave = 0;
     this.talentPanelOpen = false;
@@ -179,6 +181,8 @@ export class Game {
     this.selectedCastle = false;
     this.selectedTowerType = null;
     this.towerDropdownOpen = false;
+    this.actionsMenuOpen = false;
+    this.abilityMenuOpen = false;
     this.hoverTile = null;
     this.nextWaveCountdown = null;
     this.talentPanelOpen = false;
@@ -270,19 +274,45 @@ export class Game {
     else if (action === "loadGame") this.loadSavedGame();
     else if (action === "selectCastle") this.selectCastle(meta.castleId);
     else if (action === "selectCastleEntity") this.selectCastleEntity();
-    else if (action === "startWave") this.startWave();
-    else if (action === "pause") this.togglePause();
+    else if (action === "startWave") {
+      this.actionsMenuOpen = false;
+      this.abilityMenuOpen = false;
+      this.startWave();
+    } else if (action === "pause") {
+      this.actionsMenuOpen = false;
+      this.abilityMenuOpen = false;
+      this.togglePause();
+    }
     else if (action === "talents") this.talentPanelOpen = true;
     else if (action === "closeTalents") this.talentPanelOpen = false;
     else if (action === "unlockTalent") this.castleSystem.unlockTalent(meta.talentId);
-    else if (action === "activeAbility") this.useCastleAbility(meta.abilityId);
+    else if (action === "activeAbility") {
+      this.abilityMenuOpen = false;
+      this.useCastleAbility(meta.abilityId);
+    }
     else if (action === "cancelAbility") this.pendingAbilityId = null;
-    else if (action === "toggleTowerDropdown") this.towerDropdownOpen = !this.towerDropdownOpen;
+    else if (action === "toggleTowerDropdown") {
+      this.towerDropdownOpen = !this.towerDropdownOpen;
+      this.actionsMenuOpen = false;
+      this.abilityMenuOpen = false;
+    } else if (action === "toggleActionsMenu") {
+      this.actionsMenuOpen = !this.actionsMenuOpen;
+      this.towerDropdownOpen = false;
+      this.abilityMenuOpen = false;
+    } else if (action === "toggleAbilityMenu") {
+      this.abilityMenuOpen = !this.abilityMenuOpen;
+      this.actionsMenuOpen = false;
+      this.towerDropdownOpen = false;
+    }
     else if (action === "selectTowerType") {
       this.selectTowerType(meta.typeId);
     } else if (action === "upgradeTower") this.upgradeSelectedTower();
     else if (action === "sellTower") this.sellSelectedTower();
-    else if (action === "leaderboard") this.openLeaderboard();
+    else if (action === "leaderboard") {
+      this.actionsMenuOpen = false;
+      this.abilityMenuOpen = false;
+      this.openLeaderboard();
+    }
     else if (action === "closeLeaderboard") this.closeLeaderboard();
     else if (action === "authLeaderboard") this.authForLeaderboard();
     else if (action === "rewardGold") this.rewardGoldAd();
@@ -303,6 +333,7 @@ export class Game {
       this.selectedEnemy = null;
       this.selectedCastle = false;
       this.selectedTowerType = null;
+      this.abilityMenuOpen = false;
       this.events.emit("towerSelected", tower);
       return;
     }
@@ -315,6 +346,7 @@ export class Game {
       this.selectedTower = null;
       this.selectedTowerType = null;
       this.towerDropdownOpen = false;
+      this.abilityMenuOpen = false;
       return;
     }
 
@@ -349,6 +381,7 @@ export class Game {
     this.selectedEnemy = null;
     this.selectedCastle = false;
     this.towerDropdownOpen = false;
+    this.abilityMenuOpen = false;
     return true;
   }
 
@@ -359,6 +392,7 @@ export class Game {
     this.selectedTowerType = null;
     this.selectedEnemy = null;
     this.towerDropdownOpen = false;
+    this.abilityMenuOpen = false;
     return true;
   }
 
