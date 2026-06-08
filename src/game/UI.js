@@ -290,14 +290,11 @@ export class UI {
     const panel = game.camera.uiRect;
     const portrait = game.camera.height > game.camera.width;
     ctx.save();
-    this.drawPlayGutters(ctx, game.camera);
 
     if (portrait) {
       this.addBlockingRect(panel);
       this.addBlockingRect(game.camera.statsRect);
-      this.drawUiBackdrop(ctx, game.camera.statsRect, "top");
       this.drawPortraitStatsBar(ctx, game, game.camera.statsRect);
-      this.drawUiBackdrop(ctx, panel, "bottom");
       this.drawSidePanelSurface(ctx, panel);
       this.drawPortraitPanel(ctx, game, panel);
     } else {
@@ -324,8 +321,6 @@ export class UI {
     const inset = 8;
     this.addBlockingRect(game.camera.leftUiRect);
     this.addBlockingRect(game.camera.rightUiRect);
-    this.drawUiBackdrop(ctx, game.camera.leftUiRect, "left");
-    this.drawUiBackdrop(ctx, game.camera.rightUiRect, "right");
     const contentW = Math.max(0, Math.min(220, game.camera.leftUiRect.w - inset * 2, game.camera.rightUiRect.w - inset * 2));
     const left = {
       x: game.camera.leftUiRect.x + game.camera.leftUiRect.w - contentW - inset,

@@ -60,7 +60,7 @@ export class Renderer {
 
   async loadMapArtSprites() {
     await Promise.all(
-      Object.values(MAP_ART_ASSETS).map((source) =>
+      MAP_ART_ASSETS.map((source) =>
         this.loadImage(source).catch((error) => {
           console.warn(`[Renderer] Failed to load map art ${source}`, error);
           return null;
@@ -102,11 +102,11 @@ export class Renderer {
 
   render(game) {
     this.resize();
+    this.updateMapArtTheme(game);
     const ctx = this.ctx;
     this.drawCalls = 0;
     ctx.clearRect(0, 0, this.width, this.height);
-    ctx.fillStyle = "#0f130e";
-    ctx.fillRect(0, 0, this.width, this.height);
+    this.drawViewportBackground(ctx);
 
     ctx.save();
     ctx.translate(this.camera.x, this.camera.y);
@@ -119,6 +119,26 @@ export class Renderer {
     if (game.debugPerf) {
       this.drawPerf(ctx, game);
     }
+  }
+
+  updateMapArtTheme(game) {
+    const castleId =
+      game.castleSystem?.state?.selectedCastleId ||
+      game.castleSystem?.lastSelectedCastleId ||
+      "human";
+    this.mapArt.setTheme(castleId, this.width, this.height);
+  }
+
+  drawViewportBackground(ctx) {
+    const image = this.mapArt.getImage("background");
+    if (image) {
+      this.mapArt.drawCoverImage(ctx, image, 0, 0, this.width, this.height);
+      this.drawCalls += 1;
+      return;
+    }
+
+    ctx.fillStyle = "#0f130e";
+    ctx.fillRect(0, 0, this.width, this.height);
   }
 
   drawWorld(ctx, game) {
@@ -158,13 +178,13 @@ export class Renderer {
     const pathKey = path.points.map((point) => `${point.x},${point.y}`).join(";");
     const buildKey = map.buildableTiles.map((point) => `${point.x},${point.y}`).join(";");
     const endpointKey = `${map.spawnPosition.x},${map.spawnPosition.y}:${map.basePosition.x},${map.basePosition.y}`;
-    const key = `${width}x${height}:${tile}:${endpointKey}:${pathKey}:${buildKey}`;
+    const key = `transparent:${this.mapArt.getStaticThemeKey()}:${width}x${height}:${tile}:${endpointKey}:${pathKey}:${buildKey}`;
 
     if (!this.mapBackground || this.mapBackgroundKey !== key) {
       const canvas = this.createStaticCanvas(width, height);
       const bg = canvas.getContext("2d");
       const previousDrawCalls = this.drawCalls;
-      this.drawStaticMap(bg, map, path);
+      this.drawStaticMap(bg, map, path, { includeBackground: false });
       this.drawCalls = previousDrawCalls;
       this.mapBackground = canvas;
       this.mapBackgroundKey = key;
@@ -183,8 +203,8 @@ export class Renderer {
     return canvas;
   }
 
-  drawStaticMap(ctx, map, path) {
-    this.mapArt.drawStaticMap(ctx, map, path);
+  drawStaticMap(ctx, map, path, options = {}) {
+    this.mapArt.drawStaticMap(ctx, map, path, options);
   }
 
   drawBuildPads(ctx, game) {
