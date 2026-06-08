@@ -3,6 +3,16 @@ import { distanceSq } from "../utils/math.js";
 
 const MAX_CASTLE_LEVEL = 10;
 const DEFAULT_CASTLE_ID = "human";
+const CASTLE_MANA_MAX = 100;
+const CASTLE_MANA_REGEN_PER_SECOND = 7;
+const ABILITY_MANA_COSTS = Object.freeze({
+  heavenlyStrike: 45,
+  rallyHorn: 35,
+  thornRain: 40,
+  ancientRoots: 45,
+  fingerOfDeath: 35,
+  plagueCloud: 50,
+});
 
 function xpToNextLevel(level) {
   return Math.floor(50 * Math.max(1, level) * 1.35);
@@ -19,6 +29,11 @@ function createRuntimeState(castleId) {
     talentPoints: 0,
     unlockedTalentIds: [],
     activeCooldowns: {},
+    mana: {
+      amount: CASTLE_MANA_MAX,
+      max: CASTLE_MANA_MAX,
+      regenPerSecond: CASTLE_MANA_REGEN_PER_SECOND,
+    },
     uniqueResource: resource.key
       ? {
           key: resource.key,
@@ -83,10 +98,18 @@ export class CastleSystem {
 
   update(dt) {
     if (!this.state) return;
+    this.updateMana(dt);
     this.updateCooldowns(dt);
     this.updateTemporaryEffects(dt);
     this.updateActiveZones(dt);
     this.applyBaseEmergencySlow();
+  }
+
+  updateMana(dt) {
+    const mana = this.state?.mana;
+    if (!mana) return;
+    const regen = Math.max(0, mana.regenPerSecond + this.getCastleStat("manaRegenBonus", 0));
+    mana.amount = Math.min(mana.max, mana.amount + regen * dt);
   }
 
   updateCooldowns(dt) {
@@ -192,6 +215,14 @@ export class CastleSystem {
     if (!amount) return true;
     if (!resource || resource.amount < amount) return false;
     resource.amount -= amount;
+    return true;
+  }
+
+  spendMana(amount) {
+    const mana = this.state?.mana;
+    if (!amount) return true;
+    if (!mana || mana.amount < amount) return false;
+    mana.amount -= amount;
     return true;
   }
 
@@ -327,7 +358,12 @@ export class CastleSystem {
   }
 
   getAbilityCost(abilityConfig) {
-    return abilityConfig.soulsCost || 0;
+    if (!abilityConfig) return 0;
+    return abilityConfig.manaCost ?? ABILITY_MANA_COSTS[abilityConfig.id] ?? 35;
+  }
+
+  getAbilitySoulCost(abilityConfig) {
+    return abilityConfig?.soulsCost || 0;
   }
 
   canCastAbility(abilityId) {
@@ -335,18 +371,21 @@ export class CastleSystem {
     if (!abilityConfig || !this.state) return false;
     if ((this.state.activeCooldowns[abilityId] || 0) > 0) return false;
     const cost = this.getAbilityCost(abilityConfig);
-    return !cost || (this.state.uniqueResource?.amount || 0) >= cost;
+    const soulCost = this.getAbilitySoulCost(abilityConfig);
+    if (cost && (this.state.mana?.amount || 0) < cost) return false;
+    return !soulCost || (this.state.uniqueResource?.amount || 0) >= soulCost;
   }
 
   castAbility(abilityId, targetPoint = null) {
     const abilityConfig = this.selectedCastle?.abilities.find((ability) => ability.id === abilityId);
     if (!abilityConfig || !this.state) return { ok: false };
+    if (!this.canCastAbility(abilityId)) return { ok: false };
     if (abilityConfig.target === "area" && !targetPoint) {
       this.game.pendingAbilityId = abilityId;
       return { ok: true, targeting: true };
     }
-    if (!this.canCastAbility(abilityId)) return { ok: false };
-    if (!this.spendResource(this.getAbilityCost(abilityConfig))) return { ok: false };
+    if (!this.spendMana(this.getAbilityCost(abilityConfig))) return { ok: false };
+    if (!this.spendResource(this.getAbilitySoulCost(abilityConfig))) return { ok: false };
 
     let result = false;
     if (abilityId === "heavenlyStrike") result = this.castHeavenlyStrike(abilityConfig);

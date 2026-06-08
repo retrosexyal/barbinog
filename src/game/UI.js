@@ -1,4 +1,4 @@
-import { formatDamageRange, getAttackTypeLabel } from "../config/combat.js";
+import { formatDamageRange, getArmorTypeLabel, getAttackTypeLabel } from "../config/combat.js";
 import { TOWER_TYPES, TOWERS_BY_ID } from "../config/towers.js";
 import { clamp, formatCompact, rectContains } from "../utils/math.js";
 
@@ -61,16 +61,24 @@ function drawPanelTexture(ctx, rect, seed = 0, alpha = 0.24) {
 }
 
 function drawFittedText(ctx, text, x, y, maxWidth, size, color = "#f7edd5", align = "left", weight = "700") {
+  const value = String(text ?? "");
+  const width = Math.max(1, maxWidth);
   let fontSize = size;
   ctx.textAlign = align;
   ctx.textBaseline = "middle";
   do {
     ctx.font = `${weight} ${fontSize}px Trebuchet MS, Arial, sans-serif`;
-    if (ctx.measureText(text).width <= maxWidth || fontSize <= 10) break;
+    if (ctx.measureText(value).width <= width || fontSize <= 8) break;
     fontSize -= 1;
-  } while (fontSize > 10);
+  } while (fontSize > 8);
+  const clipX = align === "center" ? x - width * 0.5 : align === "right" ? x - width : x;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(clipX, y - fontSize, width, fontSize * 2);
+  ctx.clip();
   ctx.fillStyle = color;
-  ctx.fillText(text, x, y);
+  ctx.fillText(value, x, y);
+  ctx.restore();
 }
 
 function getTowerDamageText(tower) {
@@ -124,6 +132,40 @@ function formatCooldown(seconds) {
 function getCastleXpRatio(castleState) {
   if (!castleState) return 0;
   return clamp(castleState.xp / Math.max(1, castleState.xpToNextLevel), 0, 1);
+}
+
+function getCastleResource(castleState) {
+  const mana = castleState?.mana;
+  return {
+    key: "mana",
+    label: "Mana",
+    amount: mana ? Math.floor(mana.amount) : 0,
+    max: mana?.max || 0,
+    regenPerSecond: mana?.regenPerSecond || 0,
+  };
+}
+
+function getCastleResourceRatio(castleState) {
+  const resource = getCastleResource(castleState);
+  if (!resource.max) return 0;
+  return clamp(resource.amount / Math.max(1, resource.max), 0, 1);
+}
+
+function getEnemySpeedMultiplier(enemy) {
+  if (!enemy) return 1;
+  if (enemy.rootTimer > 0) return 0;
+  if (enemy.slowTimer > 0) return Math.max(0, 1 - enemy.slowPercent);
+  return 1;
+}
+
+function getEnemyDebuffs(enemy) {
+  const debuffs = [];
+  if (enemy?.slowTimer > 0) debuffs.push(`Slow ${Math.round(enemy.slowPercent * 100)}% (${Math.ceil(enemy.slowTimer)}s)`);
+  if (enemy?.poisonTimer > 0) debuffs.push(`Poison ${Math.round(enemy.poisonDps)}/s (${Math.ceil(enemy.poisonTimer)}s)`);
+  if (enemy?.rootTimer > 0) debuffs.push(`Root (${Math.ceil(enemy.rootTimer)}s)`);
+  if (enemy?.vulnerabilityTimer > 0) debuffs.push(`Vulnerable +${Math.round(enemy.increasedDamageTaken * 100)}%`);
+  if (enemy?.judgementTimer > 0) debuffs.push(`Judgement +${Math.round(enemy.judgementVulnerability * 100)}%`);
+  return debuffs;
 }
 
 export class UI {
@@ -181,7 +223,6 @@ export class UI {
     if (game.isRunState()) {
       this.drawGamePanel(ctx, game);
       this.drawCastleHud(ctx, game);
-      this.drawAbilityHud(ctx, game);
       this.drawTargetingHint(ctx, game);
     }
 
@@ -500,9 +541,19 @@ export class UI {
     ctx.strokeStyle = "rgba(255, 238, 190, 0.28)";
     ctx.stroke();
 
+    if (game.selectedEnemy?.active) {
+      this.drawEnemySelectedPanel(ctx, game, game.selectedEnemy, x, y, w, h, false);
+      return;
+    }
+
+    if (game.selectedCastle) {
+      this.drawCastleSelectedPanel(ctx, game, x, y, w, h, false);
+      return;
+    }
+
     const tower = game.selectedTower || TOWERS_BY_ID[game.selectedTowerType];
     if (!tower) {
-      drawFittedText(ctx, "Select a tower", x + 12, y + 24, w - 24, 15, "#d9c9a5", "left");
+      drawFittedText(ctx, "Select a tower, mob, or castle", x + 12, y + 24, w - 24, 15, "#d9c9a5", "left");
       return;
     }
 
@@ -610,6 +661,21 @@ export class UI {
     drawFittedText(ctx, value, x + w - 7, y + h * 0.5, w * 0.58, h <= 24 ? 14 : 17, color, "right");
   }
 
+  drawProgressBar(ctx, rect, ratio, color, label = "") {
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, Math.min(6, rect.h * 0.5));
+    ctx.fillStyle = "#15100c";
+    ctx.fill();
+    const fillW = Math.max(0, Math.min(rect.w, rect.w * clamp(ratio, 0, 1)));
+    if (fillW > 0) {
+      roundRect(ctx, rect.x, rect.y, fillW, rect.h, Math.min(6, rect.h * 0.5));
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(255, 238, 190, 0.22)";
+    ctx.stroke();
+    if (label) drawFittedText(ctx, label, rect.x + rect.w * 0.5, rect.y + rect.h * 0.5, rect.w - 8, Math.max(9, rect.h - 2), "#f7edd5", "center", "700");
+  }
+
   drawTowerDropdown(ctx, game, x, y, w, h, tight) {
     const selected = TOWERS_BY_ID[game.selectedTowerType] || game.selectedTower?.config || null;
     const label = game.selectedTower ? `Selected: ${game.selectedTower.name}` : selected ? `Tower: ${selected.name}  ${selected.cost} v` : "Choose Tower";
@@ -660,9 +726,19 @@ export class UI {
     ctx.strokeStyle = "rgba(255, 238, 190, 0.28)";
     ctx.stroke();
 
+    if (game.selectedEnemy?.active) {
+      this.drawEnemySelectedPanel(ctx, game, game.selectedEnemy, x, y, w, h, true);
+      return;
+    }
+
+    if (game.selectedCastle) {
+      this.drawCastleSelectedPanel(ctx, game, x, y, w, h, true);
+      return;
+    }
+
     const tower = game.selectedTower || TOWERS_BY_ID[game.selectedTowerType];
     if (!tower) {
-      drawFittedText(ctx, "Select a tower", x + 10, y + h * 0.5, w - 20, 14, "#d9c9a5", "left");
+      drawFittedText(ctx, "Select a tower, mob, or castle", x + 10, y + h * 0.5, w - 20, 14, "#d9c9a5", "left");
       return;
     }
 
@@ -691,6 +767,174 @@ export class UI {
     this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
     this.addButton("sellTower", { x: x + w - sellW - 6, y: buttonY, w: sellW, h: buttonH }, "Sell", { kind: "danger" });
     this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+  }
+
+  drawCastleSelectedPanel(ctx, game, x, y, w, h, compact) {
+    const castleState = game.castleSystem?.state;
+    const castle = game.castleSystem?.selectedCastle;
+    if (!castleState || !castle) return;
+
+    const iconR = compact ? 13 : 18;
+    const iconX = x + 14 + iconR;
+    const iconY = y + (compact ? 20 : 30);
+    ctx.fillStyle = castle.color;
+    ctx.beginPath();
+    ctx.arc(iconX, iconY, iconR, 0, Math.PI * 2);
+    ctx.fill();
+    drawFittedText(ctx, castle.icon, iconX, iconY, iconR * 1.2, compact ? 13 : 16, "#17110d", "center", "800");
+
+    drawFittedText(ctx, castle.name, x + iconR * 2 + 24, y + (compact ? 16 : 22), w - iconR * 2 - 34, compact ? 14 : 16, "#f7edd5", "left");
+    drawFittedText(ctx, `Castle Lv.${castleState.level}`, x + iconR * 2 + 24, y + (compact ? 36 : 46), w - iconR * 2 - 34, compact ? 11 : 12, "#ffd564", "left", "700");
+
+    if (compact) {
+      const resource = getCastleResource(castleState);
+      const summaryY = y + Math.min(h - 18, 58);
+      drawFittedText(ctx, `XP ${castleState.xp}/${castleState.xpToNextLevel}`, x + 10, summaryY, w * 0.48, 11, "#cdbb91", "left", "600");
+      drawFittedText(ctx, `${resource.label} ${resource.max ? `${resource.amount}/${resource.max}` : resource.amount}`, x + w - 10, summaryY, w * 0.48, 11, "#d9c6ff", "right", "700");
+      const rowH = 28;
+      const startY = y + 72;
+      const maxRows = Math.min(castle.abilities.length, Math.floor((y + h - startY) / (rowH + 4)));
+      for (let i = 0; i < maxRows; i += 1) {
+        this.drawAbilityRow(ctx, game, castle.abilities[i], { x: x + 8, y: startY + i * (rowH + 4), w: w - 16, h: rowH }, true);
+      }
+      return;
+    }
+
+    const xpText = `${castleState.xp}/${castleState.xpToNextLevel} XP`;
+    this.drawProgressBar(ctx, { x: x + 12, y: y + 62, w: w - 24, h: 12 }, getCastleXpRatio(castleState), castle.color, xpText);
+
+    const resource = getCastleResource(castleState);
+    const resourceText = resource.max ? `${resource.label} ${resource.amount}/${resource.max}` : `${resource.label} ${resource.amount}`;
+    this.drawProgressBar(ctx, { x: x + 12, y: y + 82, w: w - 24, h: 12 }, getCastleResourceRatio(castleState), "#9e80ff", resourceText);
+
+    const talentW = Math.min(80, w * 0.38);
+    this.addButton("talents", { x: x + w - talentW - 10, y: y + 104, w: talentW, h: 28 }, "Talents", {
+      kind: castleState.talentPoints > 0 ? "gold" : "default",
+    });
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    drawFittedText(ctx, `Points ${castleState.talentPoints}`, x + 12, y + 118, w - talentW - 28, 12, "#fff0b8", "left", "700");
+
+    const titleY = y + 152;
+    drawFittedText(ctx, "Abilities", x + 12, titleY, w - 24, 13, "#cdbb91", "left", "700");
+    const rowGap = 8;
+    const rowH = Math.max(46, Math.min(64, (h - titleY + y - 16 - rowGap * Math.max(0, castle.abilities.length - 1)) / Math.max(1, castle.abilities.length)));
+    for (let i = 0; i < castle.abilities.length; i += 1) {
+      const ability = castle.abilities[i];
+      const row = { x: x + 10, y: titleY + 14 + i * (rowH + rowGap), w: w - 20, h: rowH };
+      if (row.y + row.h > y + h - 8) break;
+      this.drawAbilityRow(ctx, game, ability, row, false);
+    }
+  }
+
+  drawAbilityRow(ctx, game, ability, rect, compact) {
+    const castleState = game.castleSystem?.state;
+    const cooldown = castleState?.activeCooldowns?.[ability.id] || 0;
+    const cost = game.castleSystem?.getAbilityCost(ability) || 0;
+    const soulCost = game.castleSystem?.getAbilitySoulCost?.(ability) || 0;
+    const enabled = game.castleSystem?.canCastAbility(ability.id) && game.state !== "paused";
+    const costParts = [];
+    if (cost) costParts.push(`${cost}M`);
+    if (soulCost) costParts.push(`${soulCost}S`);
+    const costText = costParts.length ? ` ${costParts.join(" ")}` : "";
+
+    this.addButton("activeAbility", rect, ability.name, {
+      meta: { abilityId: ability.id },
+      enabled,
+      kind: game.pendingAbilityId === ability.id ? "gold" : "primary",
+    });
+
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 6);
+    ctx.fillStyle = game.pendingAbilityId === ability.id ? "rgba(104, 75, 31, 0.82)" : "rgba(25, 19, 14, 0.82)";
+    ctx.fill();
+    ctx.strokeStyle = enabled ? "rgba(255, 226, 154, 0.36)" : "rgba(255, 255, 255, 0.12)";
+    ctx.stroke();
+
+    const iconSize = Math.min(28, rect.h - 12);
+    const icon = { x: rect.x + 8, y: rect.y + (rect.h - iconSize) * 0.5, w: iconSize, h: iconSize };
+    this.addButton("activeAbility", icon, ability.icon, {
+      meta: { abilityId: ability.id },
+      enabled,
+      kind: game.pendingAbilityId === ability.id ? "gold" : "primary",
+    });
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+
+    const title = cooldown > 0 ? `${ability.name} ${formatCooldown(cooldown)}` : `${ability.name}${costText}`;
+    const textX = icon.x + icon.w + 8;
+    drawFittedText(ctx, title, textX, rect.y + (compact ? rect.h * 0.5 : 16), rect.w - icon.w - 18, compact ? 12 : 13, enabled ? "#f7edd5" : "#9f9787", "left", "700");
+    if (!compact) {
+      drawFittedText(ctx, ability.description || ability.target || "", textX, rect.y + 38, rect.w - icon.w - 18, 11, "#cdbb91", "left", "600");
+    }
+  }
+
+  drawEnemySelectedPanel(ctx, game, enemy, x, y, w, h, compact) {
+    const iconX = x + (compact ? 24 : 30);
+    const iconY = y + (compact ? 23 : 34);
+    this.drawEnemyIcon(ctx, game, enemy, iconX, iconY, compact ? 18 : 23);
+
+    drawFittedText(ctx, enemy.name || enemy.id, x + (compact ? 50 : 62), y + (compact ? 17 : 24), w - 70, compact ? 14 : 16, "#f7edd5", "left");
+    drawFittedText(ctx, `HP ${Math.ceil(enemy.hp)}/${enemy.maxHp}`, x + (compact ? 50 : 62), y + (compact ? 37 : 47), w - 70, compact ? 11 : 12, "#ffcfb8", "left", "700");
+
+    const hpBar = compact
+      ? { x: x + 10, y: y + Math.min(h - 15, 52), w: w - 20, h: 8 }
+      : { x: x + 12, y: y + 64, w: w - 24, h: 12 };
+    this.drawProgressBar(ctx, hpBar, enemy.hp / Math.max(1, enemy.maxHp), "#d95047");
+
+    if (compact) return;
+
+    const currentSpeed = enemy.baseSpeed * getEnemySpeedMultiplier(enemy);
+    const lines = [
+      `Armor ${getArmorTypeLabel(enemy.armorType)}  Value ${enemy.armor}`,
+      `Speed ${Math.round(currentSpeed)} / ${Math.round(enemy.baseSpeed)}`,
+      `Base damage ${enemy.damageToBase}  Gold ${enemy.rewardGold}`,
+      `Traits ${(enemy.traits || []).length ? enemy.traits.join(", ") : "none"}`,
+    ];
+
+    for (let i = 0; i < lines.length; i += 1) {
+      drawFittedText(ctx, lines[i], x + 12, y + 98 + i * 22, w - 24, 13, i === 0 ? "#ffdca3" : "#cdbb91", "left", "600");
+    }
+
+    const debuffs = getEnemyDebuffs(enemy);
+    const debuffY = y + 198;
+    drawFittedText(ctx, "Debuffs", x + 12, debuffY, w - 24, 13, "#cdbb91", "left", "700");
+    if (!debuffs.length) {
+      drawFittedText(ctx, "None", x + 12, debuffY + 22, w - 24, 13, "#9f9787", "left", "600");
+      return;
+    }
+    for (let i = 0; i < Math.min(4, debuffs.length); i += 1) {
+      drawFittedText(ctx, debuffs[i], x + 12, debuffY + 22 + i * 20, w - 24, 12, "#e8d5ac", "left", "600");
+    }
+  }
+
+  drawEnemyIcon(ctx, game, enemy, x, y, radius) {
+    ctx.save();
+    ctx.fillStyle = "rgba(20, 14, 10, 0.82)";
+    ctx.beginPath();
+    ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 238, 190, 0.42)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const animations = enemy.animations;
+    const animation = animations?.idle || animations?.run || null;
+    const image = animation?.imageSrc ? game.renderer.images.get(animation.imageSrc)?.image : null;
+    if (image && image.complete && image.naturalWidth > 0) {
+      const frameCount = animation.frames || 1;
+      const frameWidth = animation.frameWidth || Math.floor(image.naturalWidth / frameCount);
+      const frameHeight = animation.frameHeight || image.naturalHeight;
+      const aspect = frameWidth / Math.max(1, frameHeight);
+      const drawH = radius * 2.2;
+      const drawW = drawH * aspect;
+      ctx.drawImage(image, 0, 0, frameWidth, frameHeight, x - drawW / 2, y - drawH / 2, drawW, drawH);
+    } else {
+      ctx.fillStyle = enemy.color || "#c48a42";
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#2b2118";
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   drawTowerStrip(ctx, game, x, y, w, h, compact) {
@@ -755,49 +999,29 @@ export class UI {
     if (!castleState || !castle) return;
 
     const play = game.camera.playRect;
-    const width = Math.min(292, Math.max(210, play.w - 24));
-    const rect = { x: play.x + 12, y: play.y + 12, w: width, h: 88 };
+    const base = game.map.tileCenter(game.map.basePosition.x, game.map.basePosition.y);
+    const screen = game.camera.worldToScreen(base.x + game.map.tileSize * 0.12, base.y - game.map.tileSize * 3.55);
+    const width = Math.min(190, Math.max(142, play.w - 18));
+    const height = 32;
+    const rect = {
+      x: clamp(screen.x - width * 0.5, play.x + 8, play.x + play.w - width - 8),
+      y: clamp(screen.y, play.y + 8, play.y + play.h - height - 8),
+      w: width,
+      h: height,
+    };
     this.addBlockingRect(rect);
+    this.addButton("selectCastleEntity", rect, castle.name);
     roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
-    ctx.fillStyle = "rgba(28, 22, 16, 0.94)";
+    ctx.fillStyle = game.selectedCastle ? "rgba(48, 36, 20, 0.96)" : "rgba(28, 22, 16, 0.94)";
     ctx.fill();
     drawPanelTexture(ctx, rect, rect.w + rect.h, 0.12);
-    ctx.strokeStyle = "rgba(255, 226, 154, 0.34)";
+    ctx.strokeStyle = game.selectedCastle ? castle.color : "rgba(255, 226, 154, 0.34)";
+    ctx.lineWidth = game.selectedCastle ? 2 : 1;
     ctx.stroke();
 
-    ctx.fillStyle = castle.color;
-    ctx.beginPath();
-    ctx.arc(rect.x + 23, rect.y + 24, 14, 0, Math.PI * 2);
-    ctx.fill();
-    drawFittedText(ctx, castle.icon, rect.x + 23, rect.y + 24, 16, 15, "#1b1711", "center", "800");
-    drawFittedText(ctx, castle.name, rect.x + 46, rect.y + 18, rect.w - 130, 15, "#f7edd5", "left");
-    drawFittedText(ctx, `Lv.${castleState.level}`, rect.x + rect.w - 74, rect.y + 18, 64, 15, "#ffd564", "right");
-
-    const bar = { x: rect.x + 12, y: rect.y + 45, w: rect.w - 24, h: 10 };
-    roundRect(ctx, bar.x, bar.y, bar.w, bar.h, 5);
-    ctx.fillStyle = "#17110d";
-    ctx.fill();
-    roundRect(ctx, bar.x, bar.y, bar.w * getCastleXpRatio(castleState), bar.h, 5);
-    ctx.fillStyle = castle.color;
-    ctx.fill();
-    drawFittedText(ctx, `${castleState.xp}/${castleState.xpToNextLevel} XP`, rect.x + 12, rect.y + 67, 120, 11, "#cdbb91", "left", "600");
-    drawFittedText(ctx, `TP ${castleState.talentPoints}`, rect.x + 134, rect.y + 67, 54, 11, "#fff0b8", "left", "700");
-    if (castleState.uniqueResource) {
-      drawFittedText(
-        ctx,
-        `${castleState.uniqueResource.label} ${castleState.uniqueResource.amount}`,
-        rect.x + rect.w - 70,
-        rect.y + 67,
-        58,
-        11,
-        "#d9c6ff",
-        "right",
-        "700",
-      );
-    }
-
-    this.addButton("talents", { x: rect.x + rect.w - 82, y: rect.y + 57, w: 70, h: 24 }, "Talents", { kind: castleState.talentPoints > 0 ? "gold" : "default" });
-    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    const resource = getCastleResource(castleState);
+    this.drawProgressBar(ctx, { x: rect.x + 7, y: rect.y + 6, w: rect.w - 14, h: 8 }, getCastleXpRatio(castleState), castle.color, `XP ${castleState.xp}/${castleState.xpToNextLevel}`);
+    this.drawProgressBar(ctx, { x: rect.x + 7, y: rect.y + 18, w: rect.w - 14, h: 8 }, getCastleResourceRatio(castleState), "#8f70ff", `Mana ${resource.amount}/${resource.max}`);
   }
 
   drawAbilityHud(ctx, game) {
@@ -823,12 +1047,11 @@ export class UI {
     for (let i = 0; i < castle.abilities.length; i += 1) {
       const ability = castle.abilities[i];
       const cooldown = castleState.activeCooldowns[ability.id] || 0;
-      const cost = ability.soulsCost || 0;
-      const resource = castleState.uniqueResource;
-      const canPay = !cost || (resource?.amount || 0) >= cost;
-      const enabled = cooldown <= 0 && canPay && game.state !== "paused";
-      const costText = cost ? ` ${cost}${resource?.label?.[0] || ""}` : "";
-      const label = `${ability.icon} ${cooldown > 0 ? formatCooldown(cooldown) : ability.name}${costText}`;
+      const cost = game.castleSystem?.getAbilityCost(ability) || 0;
+      const soulCost = game.castleSystem?.getAbilitySoulCost?.(ability) || 0;
+      const enabled = game.castleSystem?.canCastAbility(ability.id) && game.state !== "paused";
+      const costText = [cost ? `${cost}M` : "", soulCost ? `${soulCost}S` : ""].filter(Boolean).join(" ");
+      const label = `${ability.icon} ${cooldown > 0 ? formatCooldown(cooldown) : ability.name}${costText ? ` ${costText}` : ""}`;
       const buttonRect = { x: rect.x + 8, y: rect.y + 8 + i * (rowH + 6), w: rect.w - 16, h: rowH };
       this.addButton("activeAbility", buttonRect, label, {
         meta: { abilityId: ability.id },

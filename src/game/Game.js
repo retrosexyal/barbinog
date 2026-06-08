@@ -68,6 +68,8 @@ export class Game {
     this.unlockedTowers = Object.keys(TOWERS_BY_ID);
     this.selectedTowerType = null;
     this.selectedTower = null;
+    this.selectedEnemy = null;
+    this.selectedCastle = false;
     this.towerDropdownOpen = false;
     this.hoverTile = null;
     this.castleSelectCompletedWave = 0;
@@ -124,6 +126,7 @@ export class Game {
     }
 
     if (this.state === "gameOver" || this.state === "victory") {
+      if (this.selectedEnemy && !this.selectedEnemy.active) this.selectedEnemy = null;
       this.updateEnemyAnimations(dt, "idle");
       this.updateEffects(dt);
       return;
@@ -145,6 +148,7 @@ export class Game {
 
     this.waveManager.update(dt);
     this.updateEnemies(dt);
+    if (this.selectedEnemy && !this.selectedEnemy.active) this.selectedEnemy = null;
     this.rebuildSpatialGrid();
     this.updateTowers(dt);
     this.updateProjectiles(dt);
@@ -171,6 +175,8 @@ export class Game {
     this.score = 0;
     this.usedContinue = false;
     this.selectedTower = null;
+    this.selectedEnemy = null;
+    this.selectedCastle = false;
     this.selectedTowerType = null;
     this.towerDropdownOpen = false;
     this.hoverTile = null;
@@ -263,6 +269,7 @@ export class Game {
     if (action === "newGame") this.startNewGame();
     else if (action === "loadGame") this.loadSavedGame();
     else if (action === "selectCastle") this.selectCastle(meta.castleId);
+    else if (action === "selectCastleEntity") this.selectCastleEntity();
     else if (action === "startWave") this.startWave();
     else if (action === "pause") this.togglePause();
     else if (action === "talents") this.talentPanelOpen = true;
@@ -293,8 +300,26 @@ export class Game {
     const tower = towerAtPointer || this.getTowerAtTile(tileX, tileY);
     if (tower) {
       this.selectedTower = tower;
+      this.selectedEnemy = null;
+      this.selectedCastle = false;
       this.selectedTowerType = null;
       this.events.emit("towerSelected", tower);
+      return;
+    }
+
+    const enemy =
+      Number.isFinite(worldX) && Number.isFinite(worldY) ? this.renderer.hitTestEnemyAt(this.enemies, worldX, worldY) : null;
+    if (enemy) {
+      this.selectedEnemy = enemy;
+      this.selectedCastle = false;
+      this.selectedTower = null;
+      this.selectedTowerType = null;
+      this.towerDropdownOpen = false;
+      return;
+    }
+
+    if (Number.isFinite(worldX) && Number.isFinite(worldY) && this.hitTestCastle(worldX, worldY)) {
+      this.selectCastleEntity();
       return;
     }
 
@@ -321,8 +346,30 @@ export class Game {
     }
     this.selectedTowerType = typeId;
     this.selectedTower = null;
+    this.selectedEnemy = null;
+    this.selectedCastle = false;
     this.towerDropdownOpen = false;
     return true;
+  }
+
+  selectCastleEntity() {
+    if (!this.castleSystem?.state) return false;
+    this.selectedCastle = true;
+    this.selectedTower = null;
+    this.selectedTowerType = null;
+    this.selectedEnemy = null;
+    this.towerDropdownOpen = false;
+    return true;
+  }
+
+  hitTestCastle(worldX, worldY) {
+    const center = this.map.tileCenter(this.map.basePosition.x, this.map.basePosition.y);
+    const x = center.x + this.map.tileSize * 0.12;
+    const y = center.y + this.map.tileSize * 0.82;
+    const width = 170;
+    const height = 199;
+    const top = y - height * 0.9;
+    return worldX >= x - width * 0.5 && worldX <= x + width * 0.5 && worldY >= top && worldY <= y + height * 0.1;
   }
 
   buildTower(typeId, tileX, tileY) {
@@ -333,6 +380,8 @@ export class Game {
     this.towers.push(tower);
     this.map.occupy(tileX, tileY);
     this.selectedTower = tower;
+    this.selectedEnemy = null;
+    this.selectedCastle = false;
     this.selectedTowerType = null;
     this.recalculateScore();
     this.events.emit("goldChanged", this.gold);
@@ -402,6 +451,7 @@ export class Game {
       const enemy = this.enemies[i];
       enemy.update(dt, this);
       if (!enemy.active) {
+        if (this.selectedEnemy === enemy) this.selectedEnemy = null;
         this.enemyPool.release(enemy);
         this.enemies[i] = this.enemies[this.enemies.length - 1];
         this.enemies.pop();

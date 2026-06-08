@@ -381,6 +381,43 @@ export class Renderer {
     return worldX >= tower.x - halfWidth && worldX <= tower.x + halfWidth && worldY >= top && worldY <= bottom;
   }
 
+  hitTestEnemyAt(enemies, worldX, worldY) {
+    for (let i = enemies.length - 1; i >= 0; i -= 1) {
+      const enemy = enemies[i];
+      if (enemy.active && this.hitTestEnemy(enemy, worldX, worldY)) return enemy;
+    }
+    return null;
+  }
+
+  hitTestEnemy(enemy, worldX, worldY) {
+    const animations = enemy.animations;
+    const animation = animations?.[enemy.animationState] || animations?.run || animations?.idle;
+    const image = animation?.imageSrc ? this.images.get(animation.imageSrc)?.image : null;
+
+    if (image && image.complete && image.naturalWidth > 0) {
+      const frameCount = animation.frames || 1;
+      const frameWidth = animation.frameWidth || Math.floor(image.naturalWidth / frameCount);
+      const frameHeight = animation.frameHeight || image.naturalHeight;
+      const frameIndex = Math.floor(enemy.animationTime * (animation.fps || 8)) % frameCount;
+      const drawWidth = animation.drawWidth || enemy.radius * 4;
+      const drawHeight = animation.drawHeight || (drawWidth * frameHeight) / frameWidth;
+      const anchorY = animation.anchorY ?? 0.8;
+      const localX = animation.flipX !== false && enemy.facingX < 0 ? enemy.x - worldX : worldX - enemy.x;
+      const localY = worldY - enemy.y;
+      const left = -drawWidth / 2;
+      const top = -drawHeight * anchorY;
+      if (localX < left || localX > left + drawWidth || localY < top || localY > top + drawHeight) return false;
+
+      const sourceX = frameIndex * frameWidth + Math.floor(((localX - left) / drawWidth) * frameWidth);
+      const sourceY = Math.floor(((localY - top) / drawHeight) * frameHeight);
+      return this.sampleImageAlpha(image, sourceX, sourceY) > 32;
+    }
+
+    const dx = worldX - enemy.x;
+    const dy = worldY - enemy.y;
+    return dx * dx + dy * dy <= Math.max(18, enemy.radius * 1.5) ** 2;
+  }
+
   sampleImageAlpha(image, sourceX, sourceY) {
     if (sourceX < 0 || sourceY < 0 || sourceX >= image.naturalWidth || sourceY >= image.naturalHeight) return 0;
     if (!this.hitTestCanvas) {

@@ -62,6 +62,8 @@ export class Input {
 
     if (event.button === 2) {
       this.game.selectedTowerType = null;
+      this.game.selectedEnemy = null;
+      this.game.selectedCastle = false;
       return;
     }
 
