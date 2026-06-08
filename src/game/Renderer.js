@@ -146,6 +146,7 @@ export class Renderer {
     this.drawCastleZones(ctx, game);
     this.drawRanges(ctx, game);
     this.drawTowers(ctx, game.towers);
+    this.drawTowerPlacementPreview(ctx, game);
     for (let i = 0; i < game.projectiles.length; i += 1) this.drawProjectile(ctx, game.projectiles[i]);
     for (let i = 0; i < game.enemies.length; i += 1) this.drawEnemy(ctx, game.enemies[i], game);
     for (let i = 0; i < game.effects.length; i += 1) this.drawEffect(ctx, game.effects[i]);
@@ -208,7 +209,7 @@ export class Renderer {
   }
 
   drawBuildPads(ctx, game) {
-    const showPads = !!game.selectedTowerType && game.isRunState();
+    const showPads = (!!game.selectedTowerType || !!game.towerPlacementDrag) && game.isRunState();
     if (!showPads) return;
 
     const map = game.map;
@@ -253,16 +254,53 @@ export class Renderer {
   }
 
   drawRanges(ctx, game) {
+    const preview = game.getTowerPlacementPreview?.();
+    if (preview) {
+      this.drawRangeCircle(ctx, preview.worldX, preview.worldY, preview.range, preview.valid);
+      return;
+    }
+
     let tower = game.selectedTower;
     if (!tower && game.hoverTile) tower = game.getTowerAtTile(game.hoverTile.x, game.hoverTile.y);
     if (!tower) return;
+    this.drawRangeCircle(ctx, tower.x, tower.y, tower.range, true);
+  }
+
+  drawRangeCircle(ctx, x, y, range, valid) {
     ctx.beginPath();
-    ctx.arc(tower.x, tower.y, tower.range, 0, TAU);
-    ctx.fillStyle = "rgba(105, 178, 217, 0.12)";
+    ctx.arc(x, y, range, 0, TAU);
+    ctx.fillStyle = valid ? "rgba(105, 178, 217, 0.12)" : "rgba(231, 105, 82, 0.12)";
     ctx.fill();
-    ctx.strokeStyle = "rgba(188, 226, 255, 0.55)";
+    ctx.strokeStyle = valid ? "rgba(188, 226, 255, 0.55)" : "rgba(255, 139, 116, 0.62)";
     ctx.lineWidth = 2;
     ctx.stroke();
+  }
+
+  drawTowerPlacementPreview(ctx, game) {
+    const preview = game.getTowerPlacementPreview?.();
+    if (!preview) return;
+
+    ctx.save();
+    ctx.globalAlpha = preview.valid ? 0.78 : 0.48;
+    ctx.translate(preview.worldX, preview.worldY);
+    const tower = {
+      config: preview.config,
+      level: 0,
+      isBuilding: false,
+    };
+
+    if (!this.drawTowerSprite(ctx, tower, { drawLevel: false })) {
+      this.drawTowerPreviewShape(ctx, preview.config);
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = preview.valid ? "rgba(226, 243, 154, 0.95)" : "rgba(255, 118, 96, 0.95)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 14, 24, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+    this.drawCalls += 1;
   }
 
   drawCastleZones(ctx, game) {
@@ -349,7 +387,7 @@ export class Renderer {
     this.drawCalls += 1;
   }
 
-  drawTowerSprite(ctx, tower) {
+  drawTowerSprite(ctx, tower, options = {}) {
     const sprite = tower.config.sprite;
     const image = sprite?.imageSrc ? this.images.get(sprite.imageSrc)?.image : null;
     if (!image || !image.complete || image.naturalWidth <= 0) return false;
@@ -364,8 +402,51 @@ export class Renderer {
     ctx.fill();
 
     ctx.drawImage(image, -drawWidth / 2, -drawHeight * anchorY, drawWidth, drawHeight);
-    this.drawTowerLevel(ctx, tower, 0, 10);
+    if (options.drawLevel !== false) this.drawTowerLevel(ctx, tower, 0, 10);
     return true;
+  }
+
+  drawTowerPreviewShape(ctx, config) {
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(0, 15, 21, 8, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "#51412c";
+    ctx.fillRect(-17, -8, 34, 28);
+    ctx.fillStyle = config.color;
+
+    if (config.shape === "cannon") {
+      ctx.fillRect(-20, -10, 40, 20);
+      ctx.fillStyle = "#25211d";
+      ctx.fillRect(2, -16, 26, 12);
+    } else if (config.shape === "crystal") {
+      ctx.beginPath();
+      ctx.moveTo(0, -28);
+      ctx.lineTo(18, 4);
+      ctx.lineTo(0, 23);
+      ctx.lineTo(-18, 4);
+      ctx.closePath();
+      ctx.fill();
+    } else if (config.shape === "orb") {
+      ctx.beginPath();
+      ctx.arc(0, -6, 18, 0, TAU);
+      ctx.fill();
+    } else if (config.shape === "banner") {
+      ctx.fillRect(-4, -28, 8, 48);
+      ctx.beginPath();
+      ctx.moveTo(4, -26);
+      ctx.lineTo(28, -16);
+      ctx.lineTo(4, -6);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, -26);
+      ctx.lineTo(22, 10);
+      ctx.lineTo(-22, 10);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
 
   hitTestTowerAt(towers, worldX, worldY) {

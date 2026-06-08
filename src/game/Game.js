@@ -71,6 +71,7 @@ export class Game {
     this.selectedEnemy = null;
     this.selectedCastle = false;
     this.towerDropdownOpen = false;
+    this.towerPlacementDrag = null;
     this.actionsMenuOpen = false;
     this.abilityMenuOpen = false;
     this.hoverTile = null;
@@ -181,6 +182,7 @@ export class Game {
     this.selectedCastle = false;
     this.selectedTowerType = null;
     this.towerDropdownOpen = false;
+    this.towerPlacementDrag = null;
     this.actionsMenuOpen = false;
     this.abilityMenuOpen = false;
     this.hoverTile = null;
@@ -396,6 +398,103 @@ export class Game {
     return true;
   }
 
+  beginTowerDrag(typeId, pointerId, screenX, screenY) {
+    if (!this.selectTowerType(typeId)) return false;
+    this.towerPlacementDrag = {
+      typeId,
+      pointerId,
+      screenX,
+      screenY,
+      worldX: null,
+      worldY: null,
+      tileX: null,
+      tileY: null,
+      inPlayArea: false,
+      valid: false,
+    };
+    this.updateTowerDrag(pointerId, screenX, screenY);
+    return true;
+  }
+
+  updateTowerDrag(pointerId, screenX, screenY) {
+    const drag = this.towerPlacementDrag;
+    if (!drag || drag.pointerId !== pointerId) return false;
+
+    drag.screenX = screenX;
+    drag.screenY = screenY;
+    drag.inPlayArea = this.camera.isInPlayArea(screenX, screenY);
+    drag.valid = false;
+    drag.tileX = null;
+    drag.tileY = null;
+
+    if (!drag.inPlayArea) {
+      drag.worldX = null;
+      drag.worldY = null;
+      this.hoverTile = null;
+      return true;
+    }
+
+    const world = this.camera.screenToWorld(screenX, screenY);
+    const tile = this.map.worldToTile(world.x, world.y);
+
+    if (!this.map.isInBounds(tile.x, tile.y)) {
+      drag.worldX = world.x;
+      drag.worldY = world.y;
+      this.hoverTile = null;
+      return true;
+    }
+
+    const center = this.map.tileCenter(tile.x, tile.y);
+    drag.worldX = center.x;
+    drag.worldY = center.y;
+    drag.tileX = tile.x;
+    drag.tileY = tile.y;
+    drag.valid = this.map.canBuildAt(tile.x, tile.y);
+    this.hoverTile = { x: tile.x, y: tile.y };
+    return true;
+  }
+
+  finishTowerDrag(pointerId, screenX, screenY) {
+    const drag = this.towerPlacementDrag;
+    if (!drag || drag.pointerId !== pointerId) return false;
+    this.updateTowerDrag(pointerId, screenX, screenY);
+    const { typeId, tileX, tileY, valid } = this.towerPlacementDrag;
+    this.towerPlacementDrag = null;
+    if (valid) return this.buildTower(typeId, tileX, tileY);
+    this.selectedTowerType = null;
+    this.hoverTile = null;
+    return false;
+  }
+
+  cancelTowerDrag(pointerId = null) {
+    if (!this.towerPlacementDrag) return false;
+    if (pointerId != null && this.towerPlacementDrag.pointerId !== pointerId) return false;
+    this.towerPlacementDrag = null;
+    this.selectedTowerType = null;
+    this.hoverTile = null;
+    return true;
+  }
+
+  getTowerPreviewRange(config) {
+    const modifiers = this.castleSystem?.getTowerModifiers({
+      attackType: config.attackType,
+      damageType: config.damageType,
+      special: config.special,
+    });
+    return config.range * (modifiers?.rangeMultiplier || 1);
+  }
+
+  getTowerPlacementPreview() {
+    const drag = this.towerPlacementDrag;
+    const config = drag ? TOWERS_BY_ID[drag.typeId] : null;
+    if (!drag || !config || !Number.isFinite(drag.worldX) || !Number.isFinite(drag.worldY)) return null;
+    return {
+      ...drag,
+      config,
+      range: this.getTowerPreviewRange(config),
+    };
+  }
+
   selectCastleEntity() {
     if (!this.castleSystem?.state) return false;
     this.selectedCastle = true;
@@ -456,7 +555,7 @@ export class Game {
     this.map.unoccupy(tower.tileX, tower.tileY);
     this.gold += tower.sellValue();
     this.selectedTower = null;
-    this.selectedTowerType = tower.id;
+    this.selectedTowerType = null;
     this.recalculateScore();
     this.events.emit("goldChanged", this.gold);
     this.saveProgress();

@@ -15,7 +15,10 @@ export class Input {
     this.canvas.addEventListener("pointercancel", (event) => this.onPointerCancel(event), { passive: false });
     this.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
     window.addEventListener("keydown", (event) => this.onKeyDown(event));
-    window.addEventListener("blur", () => this.game.pauseFromSystem());
+    window.addEventListener("blur", () => {
+      this.game.cancelTowerDrag();
+      this.game.pauseFromSystem();
+    });
   }
 
   pointFromEvent(event) {
@@ -30,6 +33,10 @@ export class Input {
     event.preventDefault();
     const point = this.pointFromEvent(event);
     this.game.ui.setPointer(point.x, point.y);
+    if (this.game.towerPlacementDrag) {
+      this.game.updateTowerDrag(event.pointerId, point.x, point.y);
+      return;
+    }
     if (this.talentHold) {
       const dx = point.x - this.talentHold.x;
       const dy = point.y - this.talentHold.y;
@@ -61,6 +68,18 @@ export class Input {
     this.game.ui.setPointer(point.x, point.y);
     const button = this.game.ui.hitTest(point.x, point.y);
     if (button) {
+      if (button.action === "selectTowerType" && event.button !== 2) {
+        if (this.game.beginTowerDrag(button.meta?.typeId, event.pointerId, point.x, point.y)) {
+          if (this.canvas.setPointerCapture) {
+            try {
+              this.canvas.setPointerCapture(event.pointerId);
+            } catch {
+              // Pointer capture is best-effort; dragging still works while events stay on canvas.
+            }
+          }
+        }
+        return;
+      }
       if (button.action === "unlockTalent" && event.pointerType !== "mouse") {
         this.talentHold = {
           button,
@@ -95,6 +114,17 @@ export class Input {
     event.preventDefault();
     const point = this.pointFromEvent(event);
     this.game.ui.setPointer(point.x, point.y);
+    if (this.game.towerPlacementDrag?.pointerId === event.pointerId) {
+      this.game.finishTowerDrag(event.pointerId, point.x, point.y);
+      if (this.canvas.releasePointerCapture) {
+        try {
+          this.canvas.releasePointerCapture(event.pointerId);
+        } catch {
+          // The pointer may already be released by the browser.
+        }
+      }
+      return;
+    }
     if (!this.talentHold || this.talentHold.pointerId !== event.pointerId) return;
     const hold = this.talentHold;
     this.talentHold = null;
@@ -107,6 +137,7 @@ export class Input {
 
   onPointerCancel(event) {
     event.preventDefault();
+    this.game.cancelTowerDrag(event.pointerId);
     if (this.talentHold?.pointerId === event.pointerId) {
       this.talentHold = null;
       this.game.ui.cancelTalentHold();
@@ -121,7 +152,8 @@ export class Input {
     }
     if (event.code === "Escape") {
       event.preventDefault();
-      if (this.game.ui.pendingTalentConfirmId) this.game.ui.closeTalentConfirm();
+      if (this.game.towerPlacementDrag) this.game.cancelTowerDrag();
+      else if (this.game.ui.pendingTalentConfirmId) this.game.ui.closeTalentConfirm();
       else if (this.game.talentPanelOpen) this.game.talentPanelOpen = false;
       else if (this.game.pendingAbilityId) this.game.pendingAbilityId = null;
       else if (this.game.state === "leaderboard") this.game.closeLeaderboard();
