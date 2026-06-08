@@ -1,5 +1,5 @@
 const SHARED_MAP_ART_ASSETS = Object.freeze({
-  pathFill: new URL("../assets/map/path-fill.png", import.meta.url).href,
+  pathFill: new URL("../assets/map/path-fill-human.png", import.meta.url).href,
   buildStone: new URL("../assets/map/build-stone.png", import.meta.url).href,
   portal: new URL("../assets/map/portal.png", import.meta.url).href,
   base: new URL("../assets/map/base_2.png", import.meta.url).href,
@@ -21,6 +21,7 @@ export const MAP_ART_ASSET_SETS = Object.freeze({
   }),
   elf: Object.freeze({
     ...SHARED_MAP_ART_ASSETS,
+    pathFill: new URL("../assets/map/path-fill-elf.png", import.meta.url).href,
     background: Object.freeze({
       horizontal: new URL("../assets/map/bg_elf.webp", import.meta.url).href,
       vertical: new URL("../assets/map/bg_elf_vertical.webp", import.meta.url).href,
@@ -28,6 +29,7 @@ export const MAP_ART_ASSET_SETS = Object.freeze({
   }),
   undead: Object.freeze({
     ...SHARED_MAP_ART_ASSETS,
+    pathFill: new URL("../assets/map/path-fill-undead.png", import.meta.url).href,
     background: Object.freeze({
       horizontal: new URL("../assets/map/bg_undead.webp", import.meta.url).href,
       vertical: new URL("../assets/map/bg_undead_vertical.webp", import.meta.url).href,

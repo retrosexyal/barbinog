@@ -284,8 +284,19 @@ export class Game {
       this.togglePause();
     }
     else if (action === "talents") this.talentPanelOpen = true;
-    else if (action === "closeTalents") this.talentPanelOpen = false;
-    else if (action === "unlockTalent") this.castleSystem.unlockTalent(meta.talentId);
+    else if (action === "closeTalents") {
+      this.ui.closeTalentConfirm();
+      this.talentPanelOpen = false;
+    }
+    else if (action === "selectTalentTab") this.ui.activeTalentTabIndex = meta.index;
+    else if (action === "unlockTalent") this.ui.openTalentConfirm(meta.talentId);
+    else if (action === "cancelTalentConfirm") this.ui.closeTalentConfirm();
+    else if (action === "confirmTalentUnlock") {
+      if (this.castleSystem.unlockTalent(meta.talentId)) this.ui.closeTalentConfirm();
+    }
+    else if (action === "noop") {
+      return;
+    }
     else if (action === "activeAbility") {
       this.abilityMenuOpen = false;
       this.useCastleAbility(meta.abilityId);

@@ -81,6 +81,95 @@ function drawFittedText(ctx, text, x, y, maxWidth, size, color = "#f7edd5", alig
   ctx.restore();
 }
 
+function wrapTextLines(ctx, text, maxWidth, maxLines = 3) {
+  const words = String(text || "").split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  for (let i = 0; i < words.length; i += 1) {
+    const next = line ? `${line} ${words[i]}` : words[i];
+    if (ctx.measureText(next).width <= maxWidth) {
+      line = next;
+    } else {
+      if (line) lines.push(line);
+      line = words[i];
+      if (lines.length >= maxLines - 1) break;
+    }
+  }
+  if (line && lines.length < maxLines) lines.push(line);
+  return lines;
+}
+
+function hashString(value) {
+  let hash = 0;
+  const text = String(value || "");
+  for (let i = 0; i < text.length; i += 1) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  return hash;
+}
+
+function getBranchPalette(branchId) {
+  const palettes = {
+    damage: ["#3b1e15", "#8f3a1c", "#f0b45a"],
+    speed: ["#162836", "#2f7193", "#9bdfff"],
+    range: ["#1d351a", "#4f8d32", "#c9f28a"],
+    poison: ["#16331c", "#48933a", "#b5f26a"],
+    wind: ["#173239", "#3c8b91", "#b7f4f0"],
+    roots: ["#342412", "#7d5a24", "#e0bd65"],
+    harvest: ["#321923", "#77405a", "#dda0b8"],
+    legion: ["#252634", "#595f86", "#c8d1ff"],
+    plague: ["#1d2e17", "#667b27", "#d6dc67"],
+  };
+  return palettes[branchId] || ["#24201c", "#6a5234", "#ffd564"];
+}
+
+function getTalentKind(talentConfig) {
+  const effect = talentConfig.effects?.[0] || {};
+  const stat = `${effect.stat || ""} ${effect.abilityId || ""} ${talentConfig.id || ""}`.toLowerCase();
+  if (stat.includes("poison") || stat.includes("plague")) return "poison";
+  if (stat.includes("root") || stat.includes("slow")) return "roots";
+  if (stat.includes("soul") || stat.includes("curse") || stat.includes("spirit") || stat.includes("death")) return "soul";
+  if (stat.includes("range") || stat.includes("radius")) return "range";
+  if (stat.includes("base") || stat.includes("reduction") || stat.includes("duration")) return "shield";
+  if (stat.includes("firerate") || stat.includes("cooldown") || stat.includes("projectilespeed")) return "speed";
+  if (stat.includes("damage") || stat.includes("dps") || stat.includes("vulnerability") || stat.includes("execute")) return "damage";
+  if (effect.type === "ability") return "magic";
+  return "magic";
+}
+
+function getBranchSpentPoints(branchConfig, unlockedIds) {
+  let spent = 0;
+  for (let i = 0; i < branchConfig.talents.length; i += 1) {
+    const talentConfig = branchConfig.talents[i];
+    if (unlockedIds.includes(talentConfig.id)) spent += talentConfig.cost;
+  }
+  return spent;
+}
+
+function getTalentContext(castle, talentId) {
+  for (let i = 0; i < (castle?.branches?.length || 0); i += 1) {
+    const branchConfig = castle.branches[i];
+    for (let j = 0; j < branchConfig.talents.length; j += 1) {
+      const talentConfig = branchConfig.talents[j];
+      if (talentConfig.id === talentId) return { branchConfig, talentConfig };
+    }
+  }
+  return null;
+}
+
+function getTalentNodeRect(x, y, w, h, index, total) {
+  const pattern = [0.5, 0.32, 0.68, 0.42, 0.58, 0.5];
+  const iconSize = clamp(Math.min((w - 36) / 2.7, (h - 92) / Math.max(4.5, total * 0.95)), 36, 56);
+  const usableH = Math.max(iconSize, h - 94);
+  const step = total > 1 ? usableH / (total - 1) : 0;
+  const cx = x + w * (pattern[index % pattern.length] || 0.5);
+  const cy = y + 48 + index * step;
+  return {
+    x: cx - iconSize * 0.5,
+    y: cy - iconSize * 0.5,
+    w: iconSize,
+    h: iconSize,
+  };
+}
+
 function getTowerDamageText(tower) {
   const fallbackDamage = Number.isFinite(tower.damage) ? tower.damage : 0;
   const minDamage = Number.isFinite(tower.minDamage) ? tower.minDamage : fallbackDamage;
@@ -175,11 +264,49 @@ export class UI {
     this.pointer = { x: -1000, y: -1000 };
     this.lastWidth = 1;
     this.lastHeight = 1;
+    this.activeTalentTabIndex = 0;
+    this.touchTalentHold = null;
+    this.talentTooltip = null;
+    this.pendingTalentConfirmId = null;
   }
 
   setPointer(x, y) {
     this.pointer.x = x;
     this.pointer.y = y;
+  }
+
+  beginTalentHold(talentId, x, y) {
+    this.touchTalentHold = {
+      talentId,
+      x,
+      y,
+      startedAt: performance.now(),
+      delay: 520,
+    };
+  }
+
+  cancelTalentHold() {
+    this.touchTalentHold = null;
+  }
+
+  finishTalentHold(now = performance.now()) {
+    const hold = this.touchTalentHold;
+    this.touchTalentHold = null;
+    return !!hold && now - hold.startedAt >= hold.delay;
+  }
+
+  isTalentHoldVisible(talentId) {
+    const hold = this.touchTalentHold;
+    return !!hold && hold.talentId === talentId && performance.now() - hold.startedAt >= hold.delay;
+  }
+
+  openTalentConfirm(talentId) {
+    this.pendingTalentConfirmId = talentId;
+    this.cancelTalentHold();
+  }
+
+  closeTalentConfirm() {
+    this.pendingTalentConfirmId = null;
   }
 
   addButton(action, rect, label, options = {}) {
@@ -1186,6 +1313,7 @@ export class UI {
     const castleState = game.castleSystem?.state;
     const castle = game.castleSystem?.selectedCastle;
     if (!castleState || !castle) return;
+    this.talentTooltip = null;
     this.drawScrim(ctx, 0.64);
     const rect = {
       x: Math.max(12, (this.lastWidth - Math.min(980, this.lastWidth - 24)) * 0.5),
@@ -1206,53 +1334,468 @@ export class UI {
     this.addButton("closeTalents", { x: rect.x + rect.w - 92, y: rect.y + 18, w: 70, h: 32 }, "Close");
     this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
 
-    const columns = this.lastWidth < 760 ? 1 : 3;
-    const gap = 10;
-    const branchW = columns === 1 ? rect.w - 32 : (rect.w - 44 - gap * 2) / 3;
-    const branchH = columns === 1 ? 164 : rect.h - 104;
-    const top = rect.y + 84;
+    const mobileTabs = this.lastWidth < 760;
+    this.activeTalentTabIndex = clamp(this.activeTalentTabIndex, 0, Math.max(0, castle.branches.length - 1));
+
+    if (mobileTabs) {
+      this.drawTalentTabs(ctx, game, castle, castleState, rect);
+      const branchConfig = castle.branches[this.activeTalentTabIndex] || castle.branches[0];
+      this.drawTalentBranch(ctx, game, branchConfig, rect.x + 14, rect.y + 128, rect.w - 28, rect.h - 146, true);
+    } else {
+      const gap = 10;
+      const branchW = (rect.w - 44 - gap * 2) / 3;
+      const branchH = rect.h - 108;
+      const top = rect.y + 88;
+      for (let i = 0; i < castle.branches.length; i += 1) {
+        const branchConfig = castle.branches[i];
+        const bx = rect.x + 22 + i * (branchW + gap);
+        this.drawTalentBranch(ctx, game, branchConfig, bx, top, branchW, branchH, false);
+      }
+    }
+    if (this.talentTooltip && !this.pendingTalentConfirmId) this.drawTalentTooltip(ctx, game, this.talentTooltip);
+    if (this.pendingTalentConfirmId) this.drawTalentConfirmDialog(ctx, game, castle);
+  }
+
+  drawTalentTabs(ctx, game, castle, castleState, rect) {
+    const gap = 5;
+    const tabY = rect.y + 78;
+    const tabH = 34;
+    const tabW = (rect.w - 28 - gap * 2) / Math.max(1, castle.branches.length);
     for (let i = 0; i < castle.branches.length; i += 1) {
       const branchConfig = castle.branches[i];
-      const bx = columns === 1 ? rect.x + 16 : rect.x + 22 + i * (branchW + gap);
-      const by = columns === 1 ? top + i * (branchH + gap) : top;
-      this.drawTalentBranch(ctx, game, branchConfig, bx, by, branchW, branchH);
+      const spent = getBranchSpentPoints(branchConfig, castleState.unlockedTalentIds);
+      const tab = { x: rect.x + 14 + i * (tabW + gap), y: tabY, w: tabW, h: tabH };
+      const active = i === this.activeTalentTabIndex;
+      const palette = getBranchPalette(branchConfig.id);
+      roundRect(ctx, tab.x, tab.y, tab.w, tab.h, 5);
+      ctx.fillStyle = active ? palette[1] : "rgba(31, 24, 18, 0.92)";
+      ctx.fill();
+      ctx.strokeStyle = active ? palette[2] : "rgba(255, 226, 154, 0.22)";
+      ctx.lineWidth = active ? 2 : 1;
+      ctx.stroke();
+      drawFittedText(ctx, `${branchConfig.name} (${spent})`, tab.x + tab.w * 0.5, tab.y + tab.h * 0.5, tab.w - 10, 12, active ? "#fff7d6" : "#cdbb91", "center", "800");
+      this.addButton("selectTalentTab", tab, "", {
+        meta: { index: i },
+        kind: "default",
+      });
     }
   }
 
-  drawTalentBranch(ctx, game, branchConfig, x, y, w, h) {
+  drawTalentBranch(ctx, game, branchConfig, x, y, w, h, expanded) {
     const castleState = game.castleSystem.state;
+    const spent = getBranchSpentPoints(branchConfig, castleState.unlockedTalentIds);
+    const palette = getBranchPalette(branchConfig.id);
     roundRect(ctx, x, y, w, h, 6);
-    ctx.fillStyle = "rgba(20, 15, 11, 0.86)";
+    const fill = ctx.createLinearGradient(x, y, x, y + h);
+    fill.addColorStop(0, palette[0]);
+    fill.addColorStop(0.52, "rgba(19, 16, 13, 0.95)");
+    fill.addColorStop(1, "#0e0b09");
+    ctx.fillStyle = fill;
     ctx.fill();
-    ctx.strokeStyle = "rgba(255, 226, 154, 0.2)";
+    drawPanelTexture(ctx, { x, y, w, h }, hashString(branchConfig.id), 0.11);
+    ctx.strokeStyle = "rgba(255, 226, 154, 0.24)";
     ctx.stroke();
-    drawFittedText(ctx, branchConfig.name, x + 12, y + 20, w - 24, 17, "#fff0b8", "left");
 
-    const rowH = Math.max(24, Math.min(72, (h - 42) / branchConfig.talents.length));
+    drawFittedText(ctx, branchConfig.name, x + 14, y + 20, w - 90, expanded ? 18 : 15, "#fff0b8", "left", "800");
+    drawFittedText(ctx, `${spent} spent`, x + w - 14, y + 20, 76, 12, palette[2], "right", "800");
+
+    const nodeRects = [];
+    for (let i = 0; i < branchConfig.talents.length; i += 1) {
+      nodeRects.push(getTalentNodeRect(x, y, w, h, i, branchConfig.talents.length));
+    }
+
+    ctx.save();
+    ctx.lineCap = "round";
+    for (let i = 0; i < branchConfig.talents.length; i += 1) {
+      const talentConfig = branchConfig.talents[i];
+      if (!talentConfig.prerequisite) continue;
+      const fromIndex = branchConfig.talents.findIndex((item) => item.id === talentConfig.prerequisite);
+      if (fromIndex < 0) continue;
+      const from = nodeRects[fromIndex];
+      const to = nodeRects[i];
+      const fromUnlocked = castleState.unlockedTalentIds.includes(branchConfig.talents[fromIndex].id);
+      const toUnlocked = castleState.unlockedTalentIds.includes(talentConfig.id);
+      ctx.strokeStyle = "rgba(10, 8, 6, 0.78)";
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(from.x + from.w * 0.5, from.y + from.h * 0.5);
+      ctx.lineTo(to.x + to.w * 0.5, to.y + to.h * 0.5);
+      ctx.stroke();
+      ctx.strokeStyle = fromUnlocked && toUnlocked ? palette[2] : fromUnlocked ? "rgba(255, 213, 100, 0.55)" : "rgba(115, 101, 78, 0.55)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(from.x + from.w * 0.5, from.y + from.h * 0.5);
+      ctx.lineTo(to.x + to.w * 0.5, to.y + to.h * 0.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+
     for (let i = 0; i < branchConfig.talents.length; i += 1) {
       const talentConfig = branchConfig.talents[i];
       const unlocked = castleState.unlockedTalentIds.includes(talentConfig.id);
       const canUnlock = game.castleSystem.canUnlockTalent(talentConfig.id);
-      const row = { x: x + 8, y: y + 34 + i * rowH, w: w - 16, h: rowH - 5 };
-      roundRect(ctx, row.x, row.y, row.w, row.h, 5);
-      ctx.fillStyle = unlocked ? "rgba(92, 74, 38, 0.78)" : canUnlock ? "rgba(53, 43, 30, 0.9)" : "rgba(35, 31, 27, 0.74)";
-      ctx.fill();
-      ctx.strokeStyle = unlocked ? "#ffd564" : "rgba(255, 226, 154, 0.16)";
-      ctx.stroke();
-
-      const buttonW = Math.min(70, row.w * 0.28);
-      const titleWidth = row.w - buttonW - 18;
-      drawFittedText(ctx, `${talentConfig.final ? "*" : ""}${talentConfig.name}`, row.x + 8, row.y + 13, titleWidth, 12, unlocked ? "#fff0b8" : "#f7edd5", "left", "700");
-      drawFittedText(ctx, talentConfig.description, row.x + 8, row.y + Math.min(row.h - 10, 34), titleWidth, 10, "#cdbb91", "left", "600");
-
-      const label = unlocked ? "Owned" : `Unlock ${talentConfig.cost}`;
-      this.addButton("unlockTalent", { x: row.x + row.w - buttonW - 6, y: row.y + (row.h - 24) * 0.5, w: buttonW, h: 24 }, label, {
+      const node = nodeRects[i];
+      this.drawTalentIcon(ctx, talentConfig, node, branchConfig, { unlocked, canUnlock });
+      this.addButton("unlockTalent", node, "", {
         meta: { talentId: talentConfig.id },
-        enabled: canUnlock,
-        kind: canUnlock ? "gold" : "default",
+        enabled: true,
       });
-      this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+      const hover = rectContains(node, this.pointer.x, this.pointer.y);
+      if (hover || this.isTalentHoldVisible(talentConfig.id)) {
+        this.talentTooltip = { talentConfig, branchConfig, node, unlocked, canUnlock };
+      }
     }
+
+    const footer = { x: x + 8, y: y + h - 30, w: w - 16, h: 22 };
+    roundRect(ctx, footer.x, footer.y, footer.w, footer.h, 4);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.44)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 226, 154, 0.12)";
+    ctx.stroke();
+    drawFittedText(ctx, `[${branchConfig.name}] (${spent})`, footer.x + footer.w * 0.5, footer.y + footer.h * 0.5, footer.w - 12, 12, "#f7edd5", "center", "800");
+  }
+
+  drawTalentIcon(ctx, talentConfig, rect, branchConfig, state) {
+    const palette = getBranchPalette(branchConfig.id);
+    const hover = rectContains(rect, this.pointer.x, this.pointer.y);
+    const locked = !state.unlocked && !state.canUnlock;
+    const kind = getTalentKind(talentConfig);
+    const seed = hashString(talentConfig.id);
+    ctx.save();
+
+    roundRect(ctx, rect.x - 3, rect.y - 3, rect.w + 6, rect.h + 6, 5);
+    ctx.fillStyle = "#050403";
+    ctx.fill();
+    ctx.strokeStyle = state.unlocked ? "#ffd564" : state.canUnlock ? "#7fe26f" : "rgba(220, 211, 186, 0.3)";
+    ctx.lineWidth = hover || this.isTalentHoldVisible(talentConfig.id) ? 3 : 2;
+    ctx.stroke();
+
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 4);
+    const fill = ctx.createRadialGradient(rect.x + rect.w * 0.35, rect.y + rect.h * 0.24, 2, rect.x + rect.w * 0.5, rect.y + rect.h * 0.55, rect.w * 0.72);
+    fill.addColorStop(0, state.unlocked ? palette[2] : state.canUnlock ? "#e2d09a" : "#68645d");
+    fill.addColorStop(0.34, palette[1]);
+    fill.addColorStop(1, palette[0]);
+    ctx.fillStyle = fill;
+    ctx.fill();
+
+    ctx.globalAlpha = 0.28;
+    for (let i = 0; i < 5; i += 1) {
+      ctx.strokeStyle = i % 2 ? "#fff5cf" : "#130d08";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const yy = rect.y + 8 + ((seed + i * 11) % Math.max(8, rect.h - 16));
+      ctx.moveTo(rect.x + 6, yy);
+      ctx.lineTo(rect.x + rect.w - 6, yy + ((seed + i) % 7) - 3);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = locked ? 0.45 : 1;
+    this.drawTalentGlyph(ctx, kind, rect.x + rect.w * 0.5, rect.y + rect.h * 0.5, rect.w * 0.68, locked ? "#d2d0c9" : "#fff4d0");
+
+    if (locked) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = "#080706";
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = "rgba(210, 210, 210, 0.55)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rect.x + 8, rect.y + rect.h - 8);
+      ctx.lineTo(rect.x + rect.w - 8, rect.y + 8);
+      ctx.stroke();
+    }
+
+    if (talentConfig.final) {
+      ctx.strokeStyle = "#ffcf48";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(rect.x + rect.w - 8, rect.y + 8, 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    if (state.canUnlock && !state.unlocked) {
+      const plusSize = Math.max(16, rect.w * 0.34);
+      const px = rect.x + plusSize * 0.58;
+      const py = rect.y + plusSize * 0.58;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#183e18";
+      ctx.beginPath();
+      ctx.arc(px, py, plusSize * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#94ff75";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.strokeStyle = "#d9ffd0";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(px - plusSize * 0.22, py);
+      ctx.lineTo(px + plusSize * 0.22, py);
+      ctx.moveTo(px, py - plusSize * 0.22);
+      ctx.lineTo(px, py + plusSize * 0.22);
+      ctx.stroke();
+    }
+
+    const badgeSize = Math.max(16, rect.w * 0.32);
+    const bx = rect.x + rect.w - badgeSize * 0.66;
+    const by = rect.y + rect.h - badgeSize * 0.66;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = state.unlocked ? "#2f7d2e" : "#10100e";
+    ctx.beginPath();
+    ctx.arc(bx, by, badgeSize * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = state.unlocked ? "#b8ff8a" : "#ffd564";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    if (state.unlocked) {
+      ctx.strokeStyle = "#d7ffd0";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(bx - badgeSize * 0.22, by);
+      ctx.lineTo(bx - badgeSize * 0.05, by + badgeSize * 0.18);
+      ctx.lineTo(bx + badgeSize * 0.25, by - badgeSize * 0.2);
+      ctx.stroke();
+    } else {
+      drawFittedText(ctx, talentConfig.cost, bx, by + 0.5, badgeSize - 4, badgeSize * 0.62, "#ffd564", "center", "900");
+    }
+    ctx.restore();
+  }
+
+  drawTalentConfirmDialog(ctx, game, castle) {
+    const context = getTalentContext(castle, this.pendingTalentConfirmId);
+    if (!context) {
+      this.pendingTalentConfirmId = null;
+      return;
+    }
+    const { branchConfig, talentConfig } = context;
+    const castleState = game.castleSystem.state;
+    const unlocked = castleState.unlockedTalentIds.includes(talentConfig.id);
+    const canUnlock = game.castleSystem.canUnlockTalent(talentConfig.id);
+    const palette = getBranchPalette(branchConfig.id);
+    let status = "Этот талант сейчас нельзя выбрать.";
+    if (unlocked) status = "Этот талант уже изучен.";
+    else if (canUnlock) status = `Стоимость: ${talentConfig.cost} очко талантов.`;
+    else if (talentConfig.prerequisite && !castleState.unlockedTalentIds.includes(talentConfig.prerequisite)) status = "Сначала нужно изучить предыдущий талант.";
+    else if (talentConfig.final && castleState.finalTalentId) status = "Финальный талант уже выбран в другой ветке.";
+    else if (castleState.talentPoints < talentConfig.cost) status = `Нужно очков талантов: ${talentConfig.cost}.`;
+
+    ctx.save();
+    ctx.font = "700 13px Trebuchet MS, Arial, sans-serif";
+    const width = Math.min(430, this.lastWidth - 30);
+    const textW = width - 32;
+    const descLines = wrapTextLines(ctx, talentConfig.description, textW, 5);
+    const statusLines = wrapTextLines(ctx, status, textW, 2);
+    const height = Math.min(this.lastHeight - 32, 178 + descLines.length * 17 + statusLines.length * 16);
+    const x = (this.lastWidth - width) * 0.5;
+    const y = (this.lastHeight - height) * 0.5;
+    const rect = { x, y, w: width, h: height };
+    this.addBlockingRect({ x: 0, y: 0, w: this.lastWidth, h: this.lastHeight });
+    this.addButton("cancelTalentConfirm", { x: 0, y: 0, w: this.lastWidth, h: this.lastHeight }, "");
+    this.addButton("noop", rect, "");
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.42)";
+    ctx.fillRect(0, 0, this.lastWidth, this.lastHeight);
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fillStyle = "rgba(18, 13, 9, 0.98)";
+    ctx.fill();
+    drawPanelTexture(ctx, rect, hashString(talentConfig.id), 0.1);
+    ctx.strokeStyle = canUnlock ? "#ffd564" : "rgba(255, 226, 154, 0.38)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    drawFittedText(ctx, "Вы действительно хотите выбрать этот талант?", x + 16, y + 24, textW, 16, "#fff0b8", "left", "900");
+    drawFittedText(ctx, talentConfig.name, x + 16, y + 52, textW, 20, "#f7edd5", "left", "900");
+    drawFittedText(ctx, branchConfig.name, x + 16, y + 76, textW, 12, palette[2], "left", "800");
+
+    const iconRect = { x: x + width - 74, y: y + 44, w: 48, h: 48 };
+    this.drawTalentIcon(ctx, talentConfig, iconRect, branchConfig, { unlocked, canUnlock });
+
+    ctx.font = "600 13px Trebuchet MS, Arial, sans-serif";
+    ctx.fillStyle = "#e7dbc0";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    let lineY = y + 106;
+    for (let i = 0; i < descLines.length; i += 1) {
+      ctx.fillText(descLines[i], x + 16, lineY);
+      lineY += 17;
+    }
+    ctx.fillStyle = canUnlock ? "#bff5a8" : "#d8b38d";
+    for (let i = 0; i < statusLines.length; i += 1) {
+      ctx.fillText(statusLines[i], x + 16, lineY + 2);
+      lineY += 16;
+    }
+
+    const buttonY = y + height - 54;
+    const gap = 10;
+    const buttonW = Math.min(150, (width - 42 - gap) * 0.5);
+    const confirmX = x + width - 16 - buttonW;
+    const cancelX = confirmX - gap - buttonW;
+    this.addButton("cancelTalentConfirm", { x: cancelX, y: buttonY, w: buttonW, h: 36 }, "Отмена", {
+      kind: "default",
+    });
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    this.addButton("confirmTalentUnlock", { x: confirmX, y: buttonY, w: buttonW, h: 36 }, "Выбрать", {
+      meta: { talentId: talentConfig.id },
+      enabled: canUnlock,
+      kind: canUnlock ? "gold" : "default",
+    });
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    ctx.restore();
+  }
+
+  drawTalentGlyph(ctx, kind, cx, cy, size, color) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(2, size * 0.08);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const r = size * 0.5;
+    if (kind === "damage") {
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.42, cy + r * 0.38);
+      ctx.lineTo(cx + r * 0.42, cy - r * 0.42);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + r * 0.12, cy - r * 0.3);
+      ctx.lineTo(cx + r * 0.47, cy - r * 0.48);
+      ctx.lineTo(cx + r * 0.3, cy - r * 0.08);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.3, cy + r * 0.12);
+      ctx.lineTo(cx - r * 0.08, cy + r * 0.34);
+      ctx.stroke();
+    } else if (kind === "speed") {
+      for (let i = 0; i < 3; i += 1) {
+        const ox = (i - 1) * r * 0.28;
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.42 + ox, cy - r * 0.36);
+        ctx.lineTo(cx + r * 0.1 + ox, cy);
+        ctx.lineTo(cx - r * 0.42 + ox, cy + r * 0.36);
+        ctx.stroke();
+      }
+    } else if (kind === "range") {
+      for (let i = 0; i < 3; i += 1) {
+        ctx.beginPath();
+        ctx.arc(cx - r * 0.2, cy + r * 0.22, r * (0.34 + i * 0.18), -0.82, 0.52);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.35, cy + r * 0.28, r * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (kind === "shield") {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - r * 0.5);
+      ctx.lineTo(cx + r * 0.44, cy - r * 0.24);
+      ctx.lineTo(cx + r * 0.34, cy + r * 0.28);
+      ctx.lineTo(cx, cy + r * 0.52);
+      ctx.lineTo(cx - r * 0.34, cy + r * 0.28);
+      ctx.lineTo(cx - r * 0.44, cy - r * 0.24);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - r * 0.32);
+      ctx.lineTo(cx, cy + r * 0.35);
+      ctx.stroke();
+    } else if (kind === "poison") {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - r * 0.52);
+      ctx.bezierCurveTo(cx + r * 0.42, cy - r * 0.08, cx + r * 0.34, cy + r * 0.42, cx, cy + r * 0.52);
+      ctx.bezierCurveTo(cx - r * 0.34, cy + r * 0.42, cx - r * 0.42, cy - r * 0.08, cx, cy - r * 0.52);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(18, 34, 13, 0.8)";
+      ctx.beginPath();
+      ctx.arc(cx + r * 0.14, cy + r * 0.12, r * 0.12, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (kind === "roots") {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + r * 0.5);
+      ctx.bezierCurveTo(cx - r * 0.42, cy + r * 0.08, cx + r * 0.44, cy - r * 0.04, cx - r * 0.08, cy - r * 0.5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.08, cy - r * 0.02);
+      ctx.lineTo(cx - r * 0.46, cy - r * 0.18);
+      ctx.moveTo(cx + r * 0.1, cy + r * 0.18);
+      ctx.lineTo(cx + r * 0.46, cy + r * 0.02);
+      ctx.stroke();
+    } else if (kind === "soul") {
+      ctx.beginPath();
+      ctx.arc(cx, cy - r * 0.08, r * 0.38, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx - r * 0.14, cy - r * 0.12, r * 0.07, 0, Math.PI * 2);
+      ctx.arc(cx + r * 0.14, cy - r * 0.12, r * 0.07, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.18, cy + r * 0.28);
+      ctx.lineTo(cx + r * 0.18, cy + r * 0.28);
+      ctx.stroke();
+    } else {
+      for (let i = 0; i < 8; i += 1) {
+        const a = (Math.PI * 2 * i) / 8;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * r * 0.18, cy + Math.sin(a) * r * 0.18);
+        ctx.lineTo(cx + Math.cos(a) * r * 0.52, cy + Math.sin(a) * r * 0.52);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  drawTalentTooltip(ctx, game, tooltip) {
+    const { talentConfig, branchConfig, node, unlocked, canUnlock } = tooltip;
+    const castleState = game.castleSystem.state;
+    let status = "Unavailable";
+    if (unlocked) status = "Learned";
+    else if (canUnlock) status = `Click to learn: ${talentConfig.cost} point`;
+    else if (talentConfig.prerequisite && !castleState.unlockedTalentIds.includes(talentConfig.prerequisite)) status = "Requires the previous talent";
+    else if (talentConfig.final && castleState.finalTalentId) status = "Another final talent is already learned";
+    else if (castleState.talentPoints < talentConfig.cost) status = `Need ${talentConfig.cost} talent point`;
+
+    ctx.save();
+    ctx.font = "700 12px Trebuchet MS, Arial, sans-serif";
+    const width = Math.min(300, Math.max(220, this.lastWidth - 28));
+    const textW = width - 24;
+    const descLines = wrapTextLines(ctx, talentConfig.description, textW, 4);
+    const statusLines = wrapTextLines(ctx, status, textW, 2);
+    const height = 58 + descLines.length * 16 + statusLines.length * 15;
+    let x = node.x + node.w + 12;
+    let y = node.y + node.h * 0.5 - height * 0.5;
+    if (this.touchTalentHold && this.isTalentHoldVisible(talentConfig.id)) {
+      x = this.touchTalentHold.x + 14;
+      y = this.touchTalentHold.y - height - 18;
+    }
+    x = clamp(x, 8, this.lastWidth - width - 8);
+    y = clamp(y, 8, this.lastHeight - height - 8);
+
+    const palette = getBranchPalette(branchConfig.id);
+    roundRect(ctx, x, y, width, height, 7);
+    ctx.fillStyle = "rgba(14, 11, 8, 0.96)";
+    ctx.fill();
+    drawPanelTexture(ctx, { x, y, w: width, h: height }, hashString(talentConfig.id), 0.08);
+    ctx.strokeStyle = unlocked ? "#ffd564" : canUnlock ? "#80df72" : "rgba(255, 226, 154, 0.34)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    drawFittedText(ctx, talentConfig.name, x + 12, y + 18, textW, 15, "#fff0b8", "left", "900");
+    drawFittedText(ctx, branchConfig.name, x + 12, y + 36, textW, 11, palette[2], "left", "800");
+    ctx.font = "600 12px Trebuchet MS, Arial, sans-serif";
+    ctx.fillStyle = "#e7dbc0";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    let lineY = y + 58;
+    for (let i = 0; i < descLines.length; i += 1) {
+      ctx.fillText(descLines[i], x + 12, lineY);
+      lineY += 16;
+    }
+    ctx.fillStyle = canUnlock || unlocked ? "#bff5a8" : "#d8b38d";
+    for (let i = 0; i < statusLines.length; i += 1) {
+      ctx.fillText(statusLines[i], x + 12, lineY + 1);
+      lineY += 15;
+    }
+    ctx.restore();
   }
 
   drawMenu(ctx, game) {
