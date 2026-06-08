@@ -47,14 +47,32 @@ function drawPanelTexture(ctx, rect, seed = 0, alpha = 0.24) {
   ctx.beginPath();
   roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
   ctx.clip();
-  for (let i = 0; i < 18; i += 1) {
-    const y = rect.y + 8 + ((i * 29 + seed * 11) % Math.max(1, rect.h - 12));
-    const x = rect.x + 6 + ((i * 43 + seed * 7) % Math.max(1, rect.w - 16));
-    ctx.strokeStyle = i % 2 ? `rgba(255, 230, 171, ${alpha * 0.42})` : `rgba(39, 24, 15, ${alpha})`;
-    ctx.lineWidth = i % 3 === 0 ? 2 : 1;
+  for (let i = 0; i < 20; i += 1) {
+    const x = rect.x + 5 + ((i * 41 + seed * 13) % Math.max(1, rect.w - 10));
+    const y = rect.y + 5 + ((i * 23 + seed * 17) % Math.max(1, rect.h - 10));
+    const radius = 0.7 + ((i + seed) % 3) * 0.35;
+    ctx.fillStyle = i % 2 ? `rgba(255, 230, 171, ${alpha * 0.18})` : `rgba(21, 13, 8, ${alpha * 0.2})`;
     ctx.beginPath();
-    ctx.moveTo(x - 36, y);
-    ctx.bezierCurveTo(x - 8, y - 4, x + 24, y + 5, x + 58, y - 2);
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawButtonWoodTexture(ctx, rect, seed = 0, alpha = 0.18) {
+  ctx.save();
+  ctx.beginPath();
+  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 5);
+  ctx.clip();
+  for (let i = 0; i < 8; i += 1) {
+    const y = rect.y + 6 + ((i * 13 + seed * 5) % Math.max(1, rect.h - 12));
+    const x = rect.x + 8 + ((i * 29 + seed * 3) % Math.max(1, rect.w - 30));
+    const length = Math.min(rect.w * 0.42, 18 + ((seed + i * 7) % 24));
+    ctx.strokeStyle = i % 2 ? `rgba(255, 226, 154, ${alpha * 0.45})` : `rgba(29, 18, 11, ${alpha})`;
+    ctx.lineWidth = i % 3 === 0 ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + length, y + (((seed + i) % 3) - 1) * 0.5);
     ctx.stroke();
   }
   ctx.restore();
@@ -389,7 +407,7 @@ export class UI {
     ctx.fillStyle = fill;
     ctx.fill();
 
-    drawPanelTexture(ctx, { x: rect.x + 4, y: rect.y + 4, w: rect.w - 8, h: rect.h - 8 }, rect.x + rect.y, kind === "primary" ? 0.12 : 0.18);
+    drawButtonWoodTexture(ctx, { x: rect.x + 4, y: rect.y + 4, w: rect.w - 8, h: rect.h - 8 }, rect.x + rect.y, kind === "primary" ? 0.08 : 0.16);
 
     ctx.strokeStyle = enabled ? "rgba(255, 225, 147, 0.7)" : "rgba(255,255,255,0.12)";
     ctx.lineWidth = 2;
