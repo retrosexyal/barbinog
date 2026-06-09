@@ -275,22 +275,51 @@ function getEnemyDebuffs(enemy) {
   return debuffs;
 }
 
+function getAbilityPalette(abilityId) {
+  const palettes = {
+    heavenlyStrike: ["#34210e", "#c47a21", "#fff0a8", "#f7f8ff"],
+    rallyHorn: ["#332313", "#a86c28", "#ffd87c", "#6f3f16"],
+    thornRain: ["#102b1c", "#2d8a42", "#b8f06e", "#e6ffd1"],
+    ancientRoots: ["#2b1d10", "#7b5224", "#d6a85b", "#59351b"],
+    fingerOfDeath: ["#20172e", "#6546a1", "#d7c3ff", "#91f0bd"],
+    plagueCloud: ["#192714", "#657d28", "#c9df64", "#edf5a4"],
+  };
+  return palettes[abilityId] || ["#241b14", "#725432", "#ffd564", "#f7edd5"];
+}
+
+function getAbilityCostText(game, ability) {
+  const cost = game.castleSystem?.getAbilityCost(ability) || 0;
+  const soulCost = game.castleSystem?.getAbilitySoulCost?.(ability) || 0;
+  return [cost ? `${cost}M` : "", soulCost ? `${soulCost}S` : ""].filter(Boolean).join(" ");
+}
+
+function getAbilityTargetText(ability) {
+  const targets = {
+    area: `Target area${ability.areaRadius ? `, radius ${Math.round(ability.areaRadius)}` : ""}`,
+    self: "Instant castle buff",
+    strongest: "Hits strongest enemy",
+  };
+  return targets[ability?.target] || ability?.target || "Instant cast";
+}
+
 export class UI {
   constructor() {
     this.buttons = [];
     this.blockingRects = [];
-    this.pointer = { x: -1000, y: -1000 };
+    this.pointer = { x: -1000, y: -1000, type: "mouse" };
     this.lastWidth = 1;
     this.lastHeight = 1;
     this.activeTalentTabIndex = 0;
     this.touchTalentHold = null;
+    this.touchAbilityHold = null;
     this.talentTooltip = null;
     this.pendingTalentConfirmId = null;
   }
 
-  setPointer(x, y) {
+  setPointer(x, y, pointerType = this.pointer.type) {
     this.pointer.x = x;
     this.pointer.y = y;
+    this.pointer.type = pointerType || "mouse";
   }
 
   beginTalentHold(talentId, x, y) {
@@ -316,6 +345,31 @@ export class UI {
   isTalentHoldVisible(talentId) {
     const hold = this.touchTalentHold;
     return !!hold && hold.talentId === talentId && performance.now() - hold.startedAt >= hold.delay;
+  }
+
+  beginAbilityHold(abilityId, x, y) {
+    this.touchAbilityHold = {
+      abilityId,
+      x,
+      y,
+      startedAt: performance.now(),
+      delay: 520,
+    };
+  }
+
+  cancelAbilityHold() {
+    this.touchAbilityHold = null;
+  }
+
+  finishAbilityHold(now = performance.now()) {
+    const hold = this.touchAbilityHold;
+    this.touchAbilityHold = null;
+    return !!hold && now - hold.startedAt >= hold.delay;
+  }
+
+  isAbilityHoldVisible(abilityId) {
+    const hold = this.touchAbilityHold;
+    return !!hold && hold.abilityId === abilityId && performance.now() - hold.startedAt >= hold.delay;
   }
 
   openTalentConfirm(talentId) {
@@ -366,9 +420,9 @@ export class UI {
     this.lastHeight = game.camera.height;
 
     if (game.isRunState()) {
+      this.drawAbilityHud(ctx, game);
       this.drawGamePanel(ctx, game);
       this.drawCastleHud(ctx, game);
-      this.drawAbilityHud(ctx, game);
       this.drawTargetingHint(ctx, game);
     }
 
@@ -1165,15 +1219,51 @@ export class UI {
     const play = game.camera.playRect;
     const base = game.map.tileCenter(game.map.basePosition.x, game.map.basePosition.y);
     const screen = game.camera.worldToScreen(base.x + game.map.tileSize * 0.12, base.y - game.map.tileSize * 3.55);
+    const portrait = game.camera.height > game.camera.width;
     const castleScreenWidth = 170 * game.camera.scale;
-    const width = Math.max(64, Math.min(132, play.w - 18, castleScreenWidth));
-    const height = 28;
+    const width = Math.max(64, Math.min(portrait ? 92 : 132, play.w - 18, castleScreenWidth));
+    const height = portrait ? 16 : 28;
     const rect = {
       x: clamp(screen.x - width * 0.5, play.x + 8, play.x + play.w - width - 8),
       y: clamp(screen.y, play.y + 8, play.y + play.h - height - 8),
       w: width,
       h: height,
     };
+    const resource = getCastleResource(castleState);
+    const xpLabel = portrait ? "" : `XP ${castleState.xp}/${castleState.xpToNextLevel}`;
+    const resourceLabel = portrait ? "" : `Mana ${resource.amount}/${resource.max}`;
+
+    if (portrait) {
+      const xpBar = { x: rect.x + 4, y: rect.y + 2, w: rect.w - 8, h: 5 };
+      const manaBar = { x: rect.x + 4, y: rect.y + 10, w: rect.w - 8, h: 5 };
+      this.addButton("selectCastleEntity", rect, castle.name);
+      this.drawProgressBar(ctx, xpBar, getCastleXpRatio(castleState), castle.color, xpLabel);
+      this.drawProgressBar(ctx, manaBar, getCastleResourceRatio(castleState), "#8f70ff", resourceLabel);
+
+      if (castleState.talentPoints > 0) {
+        const plusSize = 18;
+        const plusRect = {
+          x: clamp(xpBar.x + xpBar.w - plusSize * 0.5, play.x + 8, play.x + play.w - plusSize - 8),
+          y: clamp(xpBar.y - plusSize - 4, play.y + 8, play.y + play.h - plusSize - 8),
+          w: plusSize,
+          h: plusSize,
+        };
+        this.addButton("talents", plusRect, "+", { kind: "gold" });
+        roundRect(ctx, plusRect.x, plusRect.y, plusRect.w, plusRect.h, 5);
+        const fill = ctx.createLinearGradient(plusRect.x, plusRect.y, plusRect.x, plusRect.y + plusRect.h);
+        fill.addColorStop(0, "#fff0a8");
+        fill.addColorStop(0.42, "#c18125");
+        fill.addColorStop(1, "#5b3612");
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.strokeStyle = "rgba(44, 27, 10, 0.86)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        drawFittedText(ctx, "+", plusRect.x + plusRect.w * 0.5, plusRect.y + plusRect.h * 0.5 - 0.5, plusRect.w - 4, 17, "#fff7d6", "center", "900");
+      }
+      return;
+    }
+
     this.addBlockingRect(rect);
     this.addButton("selectCastleEntity", rect, castle.name);
     roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
@@ -1183,11 +1273,6 @@ export class UI {
     ctx.strokeStyle = game.selectedCastle ? castle.color : "rgba(255, 226, 154, 0.34)";
     ctx.lineWidth = game.selectedCastle ? 2 : 1;
     ctx.stroke();
-
-    const resource = getCastleResource(castleState);
-    const portrait = game.camera.height > game.camera.width;
-    const xpLabel = portrait ? "" : `XP ${castleState.xp}/${castleState.xpToNextLevel}`;
-    const resourceLabel = portrait ? "" : `Mana ${resource.amount}/${resource.max}`;
     this.drawProgressBar(ctx, { x: rect.x + 6, y: rect.y + 5, w: rect.w - 12, h: 7 }, getCastleXpRatio(castleState), castle.color, xpLabel);
     this.drawProgressBar(ctx, { x: rect.x + 6, y: rect.y + 16, w: rect.w - 12, h: 7 }, getCastleResourceRatio(castleState), "#8f70ff", resourceLabel);
   }
@@ -1204,56 +1289,276 @@ export class UI {
       w: game.camera.worldWidth * game.camera.scale,
       h: game.camera.worldHeight * game.camera.scale,
     };
-    const buttonRect = {
-      x: clamp(mapRect.x + 10, play.x + 8, play.x + play.w - 112),
-      y: clamp(mapRect.y + mapRect.h - 42, play.y + 8, play.y + play.h - 42),
-      w: Math.min(132, Math.max(104, play.w * 0.28)),
-      h: 32,
-    };
-    this.addBlockingRect(buttonRect);
-    this.addButton("toggleAbilityMenu", buttonRect, game.abilityMenuOpen ? "Close" : "Abilities", {
-      enabled: game.state !== "gameOver" && game.state !== "victory",
-      kind: game.abilityMenuOpen ? "gold" : "default",
-    });
-    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    const abilities = castle.abilities || [];
+    if (!abilities.length) return;
 
-    if (!game.abilityMenuOpen) return;
+    const portrait = game.camera.height > game.camera.width;
+    const gap = portrait ? 7 : 8;
+    const iconSize = clamp(play.w * (portrait ? 0.13 : 0.052), 42, 54);
+    const totalW = abilities.length * iconSize + Math.max(0, abilities.length - 1) * gap;
+    const baseX = clamp(mapRect.x + 10, play.x + 8, play.x + play.w - totalW - 8);
+    const baseY = clamp(mapRect.y + mapRect.h - iconSize - 10, play.y + 8, play.y + play.h - iconSize - 8);
+    const groupRect = { x: baseX - 4, y: baseY - 4, w: totalW + 8, h: iconSize + 8 };
+    this.addBlockingRect(groupRect);
 
-    const rowH = 34;
-    const gap = 6;
-    const pad = 8;
-    const width = Math.min(260, Math.max(210, play.w * 0.45));
-    const height = pad * 2 + castle.abilities.length * rowH + Math.max(0, castle.abilities.length - 1) * gap;
-    const rect = {
-      x: clamp(buttonRect.x, play.x + 8, play.x + play.w - width - 8),
-      y: Math.max(play.y + 8, buttonRect.y - height - 6),
-      w: width,
-      h: height,
-    };
-    this.addBlockingRect(rect);
-    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
-    ctx.fillStyle = "rgba(26, 20, 15, 0.94)";
-    ctx.fill();
-    drawPanelTexture(ctx, rect, rect.x + rect.y, 0.12);
-    ctx.strokeStyle = "rgba(255, 226, 154, 0.3)";
-    ctx.stroke();
-
-    for (let i = 0; i < castle.abilities.length; i += 1) {
-      const ability = castle.abilities[i];
-      const cooldown = castleState.activeCooldowns[ability.id] || 0;
-      const cost = game.castleSystem?.getAbilityCost(ability) || 0;
-      const soulCost = game.castleSystem?.getAbilitySoulCost?.(ability) || 0;
-      const enabled = game.castleSystem?.canCastAbility(ability.id) && game.state !== "paused";
-      const costText = [cost ? `${cost}M` : "", soulCost ? `${soulCost}S` : ""].filter(Boolean).join(" ");
-      const label = `${ability.icon} ${cooldown > 0 ? formatCooldown(cooldown) : ability.name}${costText ? ` ${costText}` : ""}`;
-      const abilityRect = { x: rect.x + pad, y: rect.y + pad + i * (rowH + gap), w: rect.w - pad * 2, h: rowH };
-      this.addButton("activeAbility", abilityRect, label, {
+    let tooltipAbility = null;
+    let tooltipAnchor = null;
+    for (let i = 0; i < abilities.length; i += 1) {
+      const ability = abilities[i];
+      const rect = { x: baseX + i * (iconSize + gap), y: baseY, w: iconSize, h: iconSize };
+      const buttonEnabled = game.state !== "gameOver" && game.state !== "victory";
+      const castable = game.castleSystem?.canCastAbility(ability.id) && game.state !== "paused";
+      const hovered = this.pointer.type === "mouse" && rectContains(rect, this.pointer.x, this.pointer.y);
+      const held = this.isAbilityHoldVisible(ability.id);
+      this.addButton("activeAbility", rect, ability.name, {
         meta: { abilityId: ability.id },
-        enabled,
+        enabled: buttonEnabled,
         kind: game.pendingAbilityId === ability.id ? "gold" : "primary",
       });
-      this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+      this.drawAbilityIconButton(ctx, game, ability, rect, { castable, hovered, pending: game.pendingAbilityId === ability.id });
+      if (hovered || held) {
+        tooltipAbility = ability;
+        tooltipAnchor = rect;
+      }
     }
+
+    if (tooltipAbility && tooltipAnchor) this.drawAbilityTooltip(ctx, game, tooltipAbility, tooltipAnchor);
+  }
+
+  drawAbilityIconButton(ctx, game, ability, rect, state) {
+    const cooldown = game.castleSystem?.state?.activeCooldowns?.[ability.id] || 0;
+    const palette = getAbilityPalette(ability.id);
+    const hoverLift = state.hovered ? 1 : 0;
+    const inner = { x: rect.x + 6, y: rect.y + 6, w: rect.w - 12, h: rect.h - 12 };
+
+    ctx.save();
+    roundRect(ctx, rect.x, rect.y + hoverLift, rect.w, rect.h, 5);
+    const frame = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.h);
+    frame.addColorStop(0, state.pending ? "#fff0a8" : "#b9c3c0");
+    frame.addColorStop(0.18, "#465258");
+    frame.addColorStop(0.58, "#151c20");
+    frame.addColorStop(1, "#090c0e");
+    ctx.fillStyle = frame;
+    ctx.fill();
+    ctx.strokeStyle = state.pending ? "rgba(255, 230, 138, 0.95)" : "rgba(255, 247, 210, 0.52)";
+    ctx.lineWidth = state.pending ? 2.5 : 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(245, 245, 230, 0.72)";
+    ctx.beginPath();
+    ctx.moveTo(rect.x + 3, rect.y + 12);
+    ctx.lineTo(rect.x + 12, rect.y + 3);
+    ctx.lineTo(rect.x + 15, rect.y + 7);
+    ctx.lineTo(rect.x + 7, rect.y + 15);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(rect.x + rect.w - 3, rect.y + rect.h - 12);
+    ctx.lineTo(rect.x + rect.w - 12, rect.y + rect.h - 3);
+    ctx.lineTo(rect.x + rect.w - 15, rect.y + rect.h - 7);
+    ctx.lineTo(rect.x + rect.w - 7, rect.y + rect.h - 15);
+    ctx.closePath();
+    ctx.fill();
+
+    roundRect(ctx, inner.x, inner.y, inner.w, inner.h, 4);
+    const fill = ctx.createLinearGradient(inner.x, inner.y, inner.x, inner.y + inner.h);
+    fill.addColorStop(0, palette[1]);
+    fill.addColorStop(0.42, palette[0]);
+    fill.addColorStop(1, "#10100d");
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(10, 9, 8, 0.82)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.save();
+    roundRect(ctx, inner.x + 1, inner.y + 1, inner.w - 2, inner.h - 2, 3);
+    ctx.clip();
+    this.drawAbilityIconArt(ctx, ability.id, inner, palette);
+    ctx.restore();
+
+    if (!state.castable || cooldown > 0) {
+      ctx.fillStyle = cooldown > 0 ? "rgba(10, 9, 8, 0.62)" : "rgba(18, 18, 18, 0.54)";
+      roundRect(ctx, inner.x, inner.y, inner.w, inner.h, 4);
+      ctx.fill();
+    }
+
+    if (cooldown > 0) {
+      drawFittedText(ctx, formatCooldown(cooldown), rect.x + rect.w * 0.5, rect.y + rect.h * 0.5, rect.w - 10, 15, "#fff7d6", "center", "900");
+    } else {
+      const costText = getAbilityCostText(game, ability);
+      if (costText) {
+        ctx.fillStyle = "rgba(14, 11, 8, 0.78)";
+        roundRect(ctx, rect.x + 5, rect.y + rect.h - 17, rect.w - 10, 13, 3);
+        ctx.fill();
+        drawFittedText(ctx, costText, rect.x + rect.w * 0.5, rect.y + rect.h - 10.5, rect.w - 14, 9, state.castable ? "#fff0b8" : "#9f9787", "center", "800");
+      }
+    }
+
+    if (state.hovered) {
+      ctx.strokeStyle = "rgba(255, 255, 225, 0.86)";
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, rect.x + 2, rect.y + 2, rect.w - 4, rect.h - 4, 4);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawAbilityIconArt(ctx, abilityId, rect, palette) {
+    const cx = rect.x + rect.w * 0.5;
+    const cy = rect.y + rect.h * 0.5;
+    const s = Math.min(rect.w, rect.h);
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
+    ctx.beginPath();
+    ctx.ellipse(rect.x + s * 0.36, rect.y + s * 0.18, s * 0.38, s * 0.1, -0.16, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (abilityId === "heavenlyStrike") {
+      const rays = 10;
+      ctx.fillStyle = palette[2];
+      ctx.beginPath();
+      for (let i = 0; i < rays * 2; i += 1) {
+        const angle = -Math.PI * 0.5 + (Math.PI * 2 * i) / (rays * 2);
+        const radius = i % 2 ? s * 0.18 : s * 0.48;
+        const x = cx + Math.cos(angle) * radius;
+        const y = cy + Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = palette[3];
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (abilityId === "rallyHorn") {
+      ctx.strokeStyle = palette[3];
+      ctx.lineWidth = Math.max(3, s * 0.13);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(rect.x + s * 0.22, rect.y + s * 0.64);
+      ctx.quadraticCurveTo(rect.x + s * 0.48, rect.y + s * 0.44, rect.x + s * 0.72, rect.y + s * 0.34);
+      ctx.stroke();
+      ctx.fillStyle = palette[2];
+      ctx.beginPath();
+      ctx.ellipse(rect.x + s * 0.76, rect.y + s * 0.34, s * 0.17, s * 0.26, -0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff0a8";
+      ctx.beginPath();
+      ctx.ellipse(rect.x + s * 0.23, rect.y + s * 0.65, s * 0.1, s * 0.07, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (abilityId === "thornRain") {
+      ctx.strokeStyle = palette[3];
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      for (let i = 0; i < 5; i += 1) {
+        const x = rect.x + s * (0.22 + i * 0.14);
+        ctx.beginPath();
+        ctx.moveTo(x, rect.y + s * 0.18);
+        ctx.lineTo(x - s * 0.12, rect.y + s * 0.76);
+        ctx.stroke();
+        ctx.fillStyle = palette[2];
+        ctx.beginPath();
+        ctx.moveTo(x - s * 0.12, rect.y + s * 0.76);
+        ctx.lineTo(x - s * 0.04, rect.y + s * 0.62);
+        ctx.lineTo(x - s * 0.19, rect.y + s * 0.64);
+        ctx.closePath();
+        ctx.fill();
+      }
+    } else if (abilityId === "ancientRoots") {
+      ctx.strokeStyle = palette[2];
+      ctx.lineWidth = Math.max(3, s * 0.09);
+      ctx.lineCap = "round";
+      for (let i = 0; i < 4; i += 1) {
+        const offset = (i - 1.5) * s * 0.12;
+        ctx.beginPath();
+        ctx.moveTo(cx + offset, rect.y + s * 0.76);
+        ctx.bezierCurveTo(cx - s * 0.36 + offset, cy + s * 0.08, cx + s * 0.34 - offset, cy - s * 0.08, cx - offset * 0.35, rect.y + s * 0.24);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#5e3518";
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.15, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (abilityId === "fingerOfDeath") {
+      ctx.strokeStyle = palette[2];
+      ctx.lineWidth = Math.max(4, s * 0.15);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(rect.x + s * 0.24, rect.y + s * 0.72);
+      ctx.lineTo(rect.x + s * 0.58, rect.y + s * 0.36);
+      ctx.lineTo(rect.x + s * 0.75, rect.y + s * 0.2);
+      ctx.stroke();
+      ctx.strokeStyle = palette[3];
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rect.x + s * 0.4, rect.y + s * 0.32);
+      ctx.lineTo(rect.x + s * 0.58, rect.y + s * 0.36);
+      ctx.lineTo(rect.x + s * 0.5, rect.y + s * 0.52);
+      ctx.stroke();
+    } else if (abilityId === "plagueCloud") {
+      ctx.fillStyle = palette[2];
+      const blobs = [
+        [0.35, 0.52, 0.2],
+        [0.52, 0.42, 0.24],
+        [0.66, 0.56, 0.18],
+        [0.48, 0.63, 0.23],
+      ];
+      for (const [x, y, r] of blobs) {
+        ctx.beginPath();
+        ctx.arc(rect.x + s * x, rect.y + s * y, s * r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#edf5a4";
+      ctx.beginPath();
+      ctx.arc(rect.x + s * 0.38, rect.y + s * 0.48, s * 0.05, 0, Math.PI * 2);
+      ctx.arc(rect.x + s * 0.61, rect.y + s * 0.56, s * 0.04, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = palette[2];
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.32, 0, Math.PI * 2);
+      ctx.fill();
+      drawFittedText(ctx, abilityId.slice(0, 1).toUpperCase(), cx, cy, s * 0.6, s * 0.42, palette[3], "center", "900");
+    }
+  }
+
+  drawAbilityTooltip(ctx, game, ability, anchor) {
+    const play = game.camera.playRect;
+    const costText = getAbilityCostText(game, ability);
+    const cooldown = game.castleSystem?.state?.activeCooldowns?.[ability.id] || 0;
+    const cooldownText = cooldown > 0 ? `Cooldown ${formatCooldown(cooldown)}` : `Cooldown ${Math.round(game.castleSystem?.getAbilityCooldown?.(ability) || ability.cooldown || 0)}s`;
+    const details = [ability.description || "", getAbilityTargetText(ability), cooldownText, costText ? `Cost ${costText}` : ""].filter(Boolean);
+    const width = Math.min(310, Math.max(226, play.w - 24));
+    ctx.save();
+    ctx.font = "600 12px Trebuchet MS, Arial, sans-serif";
+    const descriptionLines = wrapTextLines(ctx, details.join("  |  "), width - 24, 5);
+    const height = 46 + descriptionLines.length * 16;
+    const x = clamp(anchor.x + anchor.w - width, play.x + 8, play.x + play.w - width - 8);
+    const y = anchor.y - height - 8 >= play.y + 8 ? anchor.y - height - 8 : clamp(anchor.y + anchor.h + 8, play.y + 8, play.y + play.h - height - 8);
+    const rect = { x, y, w: width, h: height };
+    this.addBlockingRect(rect);
+
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
+    ctx.fillStyle = "rgba(24, 18, 13, 0.96)";
+    ctx.fill();
+    drawPanelTexture(ctx, rect, rect.x + rect.y, 0.12);
+    ctx.strokeStyle = "rgba(255, 226, 154, 0.44)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const palette = getAbilityPalette(ability.id);
+    ctx.fillStyle = palette[2];
+    ctx.beginPath();
+    ctx.arc(rect.x + 18, rect.y + 20, 8, 0, Math.PI * 2);
+    ctx.fill();
+    drawFittedText(ctx, ability.name, rect.x + 32, rect.y + 19, rect.w - 44, 14, "#f7edd5", "left", "800");
+
+    for (let i = 0; i < descriptionLines.length; i += 1) {
+      drawFittedText(ctx, descriptionLines[i], rect.x + 12, rect.y + 42 + i * 16, rect.w - 24, 12, i === 0 ? "#e7d4ac" : "#cdbb91", "left", "600");
+    }
+    ctx.restore();
   }
 
   drawTargetingHint(ctx, game) {

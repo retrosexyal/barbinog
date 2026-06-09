@@ -5,6 +5,7 @@ export class Input {
     this.world = { x: 0, y: 0 };
     this.tile = { x: 0, y: 0 };
     this.talentHold = null;
+    this.abilityHold = null;
     this.bind();
   }
 
@@ -32,7 +33,7 @@ export class Input {
   onPointerMove(event) {
     event.preventDefault();
     const point = this.pointFromEvent(event);
-    this.game.ui.setPointer(point.x, point.y);
+    this.game.ui.setPointer(point.x, point.y, event.pointerType);
     if (this.game.towerPlacementDrag) {
       this.game.updateTowerDrag(event.pointerId, point.x, point.y);
       return;
@@ -43,6 +44,14 @@ export class Input {
       if (dx * dx + dy * dy > 196) {
         this.talentHold = null;
         this.game.ui.cancelTalentHold();
+      }
+    }
+    if (this.abilityHold) {
+      const dx = point.x - this.abilityHold.x;
+      const dy = point.y - this.abilityHold.y;
+      if (dx * dx + dy * dy > 196) {
+        this.abilityHold = null;
+        this.game.ui.cancelAbilityHold();
       }
     }
     if (this.game.ui.blocksPointer(point.x, point.y)) {
@@ -65,7 +74,7 @@ export class Input {
   onPointerDown(event) {
     event.preventDefault();
     const point = this.pointFromEvent(event);
-    this.game.ui.setPointer(point.x, point.y);
+    this.game.ui.setPointer(point.x, point.y, event.pointerType);
     const button = this.game.ui.hitTest(point.x, point.y);
     if (button) {
       if (button.action === "selectTowerType" && event.button !== 2) {
@@ -88,6 +97,16 @@ export class Input {
           pointerId: event.pointerId,
         };
         this.game.ui.beginTalentHold(button.meta.talentId, point.x, point.y);
+        return;
+      }
+      if (button.action === "activeAbility" && event.pointerType !== "mouse") {
+        this.abilityHold = {
+          button,
+          x: point.x,
+          y: point.y,
+          pointerId: event.pointerId,
+        };
+        this.game.ui.beginAbilityHold(button.meta.abilityId, point.x, point.y);
         return;
       }
       this.game.handleUIAction(button.action, button.meta);
@@ -113,7 +132,7 @@ export class Input {
   onPointerUp(event) {
     event.preventDefault();
     const point = this.pointFromEvent(event);
-    this.game.ui.setPointer(point.x, point.y);
+    this.game.ui.setPointer(point.x, point.y, event.pointerType);
     if (this.game.towerPlacementDrag?.pointerId === event.pointerId) {
       this.game.finishTowerDrag(event.pointerId, point.x, point.y);
       if (this.canvas.releasePointerCapture) {
@@ -122,6 +141,16 @@ export class Input {
         } catch {
           // The pointer may already be released by the browser.
         }
+      }
+      return;
+    }
+    if (this.abilityHold?.pointerId === event.pointerId) {
+      const hold = this.abilityHold;
+      this.abilityHold = null;
+      const wasLongPress = this.game.ui.finishAbilityHold();
+      const button = this.game.ui.hitTest(point.x, point.y);
+      if (!wasLongPress && button?.action === "activeAbility" && button.meta?.abilityId === hold.button.meta?.abilityId) {
+        this.game.handleUIAction(button.action, button.meta);
       }
       return;
     }
@@ -141,6 +170,10 @@ export class Input {
     if (this.talentHold?.pointerId === event.pointerId) {
       this.talentHold = null;
       this.game.ui.cancelTalentHold();
+    }
+    if (this.abilityHold?.pointerId === event.pointerId) {
+      this.abilityHold = null;
+      this.game.ui.cancelAbilityHold();
     }
   }
 
