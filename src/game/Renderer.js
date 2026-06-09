@@ -184,8 +184,9 @@ export class Renderer {
     const height = map.height * tile;
     const pathKey = path.points.map((point) => `${point.x},${point.y}`).join(";");
     const buildKey = map.buildableTiles.map((point) => `${point.x},${point.y}`).join(";");
+    const blockKey = map.blockedTiles.map((point) => `${point.x},${point.y}`).join(";");
     const endpointKey = `${map.spawnPosition.x},${map.spawnPosition.y}:${map.basePosition.x},${map.basePosition.y}`;
-    const key = `transparent:${this.mapArt.getStaticThemeKey()}:${width}x${height}:${tile}:${endpointKey}:${pathKey}:${buildKey}`;
+    const key = `transparent:${this.mapArt.getStaticThemeKey()}:${width}x${height}:${tile}:${endpointKey}:${pathKey}:${buildKey}:${blockKey}`;
 
     if (!this.mapBackground || this.mapBackgroundKey !== key) {
       const canvas = this.createStaticCanvas(width, height);
@@ -215,48 +216,7 @@ export class Renderer {
   }
 
   drawBuildPads(ctx, game) {
-    const showPads = (!!game.selectedTowerType || !!game.towerPlacementDrag) && game.isRunState();
-    if (!showPads) return;
-
-    const map = game.map;
-    const tile = map.tileSize;
-    for (let i = 0; i < map.buildableTiles.length; i += 1) {
-      const { x, y } = map.buildableTiles[i];
-      this.mapArt.drawBuildStoneTile(ctx, map, x, y, true);
-
-      const px = x * tile;
-      const py = y * tile;
-      const canBuild = map.canBuildAt(x, y);
-      ctx.fillStyle = canBuild ? "rgba(226, 238, 124, 0.18)" : "rgba(135, 67, 54, 0.24)";
-      ctx.beginPath();
-      ctx.moveTo(px + 9, py + 8);
-      ctx.lineTo(px + tile - 8, py + 8);
-      ctx.lineTo(px + tile - 6, py + tile - 13);
-      ctx.lineTo(px + tile - 12, py + tile - 6);
-      ctx.lineTo(px + 12, py + tile - 6);
-      ctx.lineTo(px + 6, py + tile - 13);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = canBuild ? "rgba(244, 237, 143, 0.88)" : "rgba(231, 105, 82, 0.76)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-    if (game.hoverTile && map.isInBounds(game.hoverTile.x, game.hoverTile.y)) {
-      const px = game.hoverTile.x * tile;
-      const py = game.hoverTile.y * tile;
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = map.canBuildAt(game.hoverTile.x, game.hoverTile.y) ? "#e8f39a" : "#f37d69";
-      ctx.beginPath();
-      ctx.moveTo(px + 5, py + 5);
-      ctx.lineTo(px + tile - 5, py + 5);
-      ctx.lineTo(px + tile - 3, py + tile - 12);
-      ctx.lineTo(px + tile - 11, py + tile - 3);
-      ctx.lineTo(px + 11, py + tile - 3);
-      ctx.lineTo(px + 3, py + tile - 12);
-      ctx.closePath();
-      ctx.stroke();
-    }
-    this.drawCalls += map.buildableTiles.length;
+    return;
   }
 
   drawRanges(ctx, game) {
@@ -288,6 +248,10 @@ export class Renderer {
 
     ctx.save();
     ctx.globalAlpha = preview.valid ? 0.78 : 0.48;
+    ctx.shadowColor = preview.valid ? "rgba(226, 243, 154, 0.95)" : "rgba(255, 118, 96, 0.95)";
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.translate(preview.worldX, preview.worldY);
     const tower = {
       config: preview.config,
@@ -299,12 +263,6 @@ export class Renderer {
       this.drawTowerPreviewShape(ctx, preview.config);
     }
 
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = preview.valid ? "rgba(226, 243, 154, 0.95)" : "rgba(255, 118, 96, 0.95)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(0, 14, 24, 0, TAU);
-    ctx.stroke();
     ctx.restore();
     this.drawCalls += 1;
   }
@@ -568,43 +526,44 @@ export class Renderer {
 
   drawTowerConstruction(ctx, tower) {
     const progress = Math.max(0, Math.min(1, tower.buildProgress || 0));
-    const height = 44;
+    const scale = 1.45;
+    const height = 44 * scale;
     const builtHeight = height * progress;
 
     ctx.fillStyle = "rgba(0,0,0,0.24)";
     ctx.beginPath();
-    ctx.ellipse(0, 15, 22, 8, 0, 0, TAU);
+    ctx.ellipse(0, 20, 32, 11, 0, 0, TAU);
     ctx.fill();
 
     ctx.fillStyle = "#6b5338";
-    ctx.fillRect(-18, 8, 36, 10);
+    ctx.fillRect(-26, 10, 52, 14);
     ctx.fillStyle = "#3b2b1e";
-    ctx.fillRect(-15, 13, 30, 5);
+    ctx.fillRect(-22, 17, 44, 7);
 
     ctx.strokeStyle = "#d3a85f";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(-17, 12);
-    ctx.lineTo(-12, -24);
-    ctx.moveTo(17, 12);
-    ctx.lineTo(12, -24);
-    ctx.moveTo(-22, 0);
-    ctx.lineTo(22, -15);
-    ctx.moveTo(-22, -14);
-    ctx.lineTo(22, 1);
+    ctx.moveTo(-25, 16);
+    ctx.lineTo(-17, -35);
+    ctx.moveTo(25, 16);
+    ctx.lineTo(17, -35);
+    ctx.moveTo(-31, 0);
+    ctx.lineTo(31, -22);
+    ctx.moveTo(-31, -20);
+    ctx.lineTo(31, 2);
     ctx.stroke();
 
     ctx.save();
     ctx.beginPath();
-    ctx.rect(-24, 18 - builtHeight, 48, builtHeight);
+    ctx.rect(-34, 24 - builtHeight, 68, builtHeight);
     ctx.clip();
     ctx.fillStyle = tower.config.color;
     ctx.globalAlpha = 0.72;
-    ctx.fillRect(-14, -22, 28, 40);
+    ctx.fillRect(-20, -32, 40, 58);
     ctx.beginPath();
-    ctx.moveTo(0, -32);
-    ctx.lineTo(20, 0);
-    ctx.lineTo(-20, 0);
+    ctx.moveTo(0, -46);
+    ctx.lineTo(29, 0);
+    ctx.lineTo(-29, 0);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -612,7 +571,7 @@ export class Renderer {
     ctx.strokeStyle = "rgba(255, 230, 156, 0.9)";
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(0, 16, 24, -Math.PI / 2, -Math.PI / 2 + TAU * progress);
+    ctx.arc(0, 21, 34, -Math.PI / 2, -Math.PI / 2 + TAU * progress);
     ctx.stroke();
   }
 

@@ -383,8 +383,12 @@ export class Game {
     }
 
     if (this.selectedTowerType) {
-      if (this.map.canBuildAt(tileX, tileY)) {
-        this.buildTower(this.selectedTowerType, tileX, tileY);
+      const placementTile =
+        Number.isFinite(worldX) && Number.isFinite(worldY)
+          ? this.worldToTowerPlacementTile(worldX, worldY)
+          : { x: tileX, y: tileY };
+      if (this.map.canBuildAt(placementTile.x, placementTile.y)) {
+        this.buildTower(this.selectedTowerType, placementTile.x, placementTile.y);
       } else {
         this.selectedTowerType = null;
       }
@@ -463,7 +467,7 @@ export class Game {
     }
 
     const world = this.camera.screenToWorld(screenX, screenY);
-    const tile = this.map.worldToTile(world.x, world.y);
+    const tile = this.worldToTowerPlacementTile(world.x, world.y);
 
     if (!this.map.isInBounds(tile.x, tile.y)) {
       drag.worldX = world.x;
@@ -472,7 +476,7 @@ export class Game {
       return true;
     }
 
-    const center = this.map.tileCenter(tile.x, tile.y);
+    const center = this.map.footprintCenter(tile.x, tile.y);
     drag.worldX = center.x;
     drag.worldY = center.y;
     drag.tileX = tile.x;
@@ -480,6 +484,14 @@ export class Game {
     drag.valid = this.map.canBuildAt(tile.x, tile.y);
     this.hoverTile = { x: tile.x, y: tile.y };
     return true;
+  }
+
+  worldToTowerPlacementTile(worldX, worldY, out = { x: 0, y: 0 }) {
+    const footprint = this.map.towerFootprint || { width: 1, height: 1 };
+    const tileSize = this.map.tileSize;
+    out.x = Math.floor(worldX / tileSize - Math.max(1, footprint.width || 1) * 0.5 + 0.5);
+    out.y = Math.floor(worldY / tileSize - Math.max(1, footprint.height || 1) * 0.5 + 0.5);
+    return out;
   }
 
   finishTowerDrag(pointerId, screenX, screenY) {
@@ -514,8 +526,23 @@ export class Game {
 
   getTowerPlacementPreview() {
     const drag = this.towerPlacementDrag;
-    const config = drag ? TOWERS_BY_ID[drag.typeId] : null;
-    if (!drag || !config || !Number.isFinite(drag.worldX) || !Number.isFinite(drag.worldY)) return null;
+    const typeId = drag?.typeId || this.selectedTowerType;
+    const config = typeId ? TOWERS_BY_ID[typeId] : null;
+    if (!config) return null;
+    if (!drag && this.hoverTile) {
+      const center = this.map.footprintCenter(this.hoverTile.x, this.hoverTile.y);
+      return {
+        typeId,
+        tileX: this.hoverTile.x,
+        tileY: this.hoverTile.y,
+        worldX: center.x,
+        worldY: center.y,
+        valid: this.map.canBuildAt(this.hoverTile.x, this.hoverTile.y),
+        config,
+        range: this.getTowerPreviewRange(config),
+      };
+    }
+    if (!drag || !Number.isFinite(drag.worldX) || !Number.isFinite(drag.worldY)) return null;
     return {
       ...drag,
       config,
@@ -552,7 +579,7 @@ export class Game {
       castleId: this.castleSystem?.state?.selectedCastleId || this.castleSystem?.lastSelectedCastleId || "human",
     });
     this.towers.push(tower);
-    this.map.occupy(tileX, tileY);
+    this.map.occupy(tileX, tileY, tower.footprint);
     this.selectedTower = tower;
     this.selectedEnemy = null;
     this.selectedCastle = false;
@@ -582,7 +609,7 @@ export class Game {
     if (!tower) return false;
     const index = this.towers.indexOf(tower);
     if (index >= 0) this.towers.splice(index, 1);
-    this.map.unoccupy(tower.tileX, tower.tileY);
+    this.map.unoccupy(tower.tileX, tower.tileY, tower.footprint);
     this.gold += tower.sellValue();
     this.selectedTower = null;
     this.selectedTowerType = null;
@@ -595,7 +622,15 @@ export class Game {
   getTowerAtTile(tileX, tileY) {
     for (let i = 0; i < this.towers.length; i += 1) {
       const tower = this.towers[i];
-      if (tower.tileX === tileX && tower.tileY === tileY) return tower;
+      const footprint = tower.footprint || this.map.towerFootprint || { width: 1, height: 1 };
+      if (
+        tileX >= tower.tileX &&
+        tileY >= tower.tileY &&
+        tileX < tower.tileX + Math.max(1, footprint.width || 1) &&
+        tileY < tower.tileY + Math.max(1, footprint.height || 1)
+      ) {
+        return tower;
+      }
     }
     return null;
   }

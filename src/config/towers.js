@@ -15,18 +15,20 @@ export const TARGET_MODES = Object.freeze([
   "strongest",
 ]);
 
+const TOWER_SPRITE_SCALE = 1.425;
+
 function towerSprite(fileName, drawWidth, drawHeight, anchorY) {
   return Object.freeze({
     imageSrc: new URL(`../assets/towers/${fileName}`, import.meta.url).href,
-    drawWidth,
-    drawHeight,
+    drawWidth: Math.round(drawWidth * TOWER_SPRITE_SCALE),
+    drawHeight: Math.round(drawHeight * TOWER_SPRITE_SCALE),
     anchorY,
   });
 }
 
 const ARCHER_SPRITES = Object.freeze({
   human: Object.freeze([
-    towerSprite("archer-tower.png", 58, 68, 0.66),
+    towerSprite("archer-tower.png", 48, 58, 0.66),
     towerSprite("human-archer-tower-2.png", 58, 68, 0.66),
     towerSprite("human-archer-tower-3.png", 58, 68, 0.66),
   ]),

@@ -52,7 +52,8 @@ export class Tower {
     this.castleId = options.castleId || null;
     this.tileX = tileX;
     this.tileY = tileY;
-    const center = map.tileCenter(tileX, tileY);
+    this.footprint = map.towerFootprint || { width: 1, height: 1 };
+    const center = map.footprintCenter(tileX, tileY, this.footprint);
     this.x = center.x;
     this.y = center.y;
     this.projectileX = center.x + (TOWERS_BY_ID[typeId].projectileDX || 0);

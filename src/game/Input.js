@@ -63,7 +63,11 @@ export class Input {
       return;
     }
     this.game.camera.screenToWorld(point.x, point.y, this.world);
-    this.game.map.worldToTile(this.world.x, this.world.y, this.tile);
+    if (this.game.selectedTowerType) {
+      this.game.worldToTowerPlacementTile(this.world.x, this.world.y, this.tile);
+    } else {
+      this.game.map.worldToTile(this.world.x, this.world.y, this.tile);
+    }
     if (this.game.map.isInBounds(this.tile.x, this.tile.y)) {
       this.game.hoverTile = { x: this.tile.x, y: this.tile.y };
     } else {

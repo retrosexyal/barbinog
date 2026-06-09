@@ -1,6 +1,5 @@
 const SHARED_MAP_ART_ASSETS = Object.freeze({
   pathFill: new URL("../assets/map/path-fill-human.png", import.meta.url).href,
-  buildStone: new URL("../assets/map/build-stone.png", import.meta.url).href,
   portal: new URL("../assets/map/portal.png", import.meta.url).href,
   base: new URL("../assets/map/base_2.png", import.meta.url).href,
   tree: new URL("../assets/map/tree.png", import.meta.url).href,
@@ -168,41 +167,29 @@ export class MapArt {
   }
 
   drawUniqueLandmarks(ctx, map) {
-    this.drawAtTile(ctx, map, "water", 2.8, 13.0, 150, 80, 0.78, 1);
-    this.drawAtTile(ctx, map, "angel", 15.2, 4.5, 118, 104, 0.88, 1);
+    this.drawDecorationLayer(ctx, map, "landmark");
   }
 
   drawSparseDecorations(ctx, map, layer) {
-    const candidates =
-      layer === "back"
-        ? [
-            ["ruins", 2.2, 3.6, 96, 66],
-            ["rocks", 15.4, 8.8, 84, 52],
-            ["rocks", 3.2, 18.2, 78, 48],
-            ["ruins", 14.7, 20.2, 96, 66],
-          ]
-        : [
-            ["tree", 2.1, 10.0, 66, 92],
-            ["pine", 4.2, 15.0, 62, 90],
-            ["tree", 15.7, 14.4, 66, 92],
-            ["pine", 7.8, 22.1, 60, 88],
-            ["rocks", 11.4, 2.1, 76, 48],
-          ];
+    this.drawDecorationLayer(ctx, map, layer);
+  }
 
-    for (let i = 0; i < candidates.length; i += 1) {
-      const [name, tileX, tileY, width, height] = candidates[i];
-      if (!this.canPlaceDecor(map, tileX, tileY, width, height)) continue;
+  drawDecorationLayer(ctx, map, layer) {
+    const decorations = map.decorations || [];
+    for (let i = 0; i < decorations.length; i += 1) {
+      const decoration = decorations[i];
+      if (decoration.layer !== layer) continue;
       this.drawAtTile(
         ctx,
         map,
-        name,
-        tileX,
-        tileY,
-        width,
-        height,
-        0.86,
-        0.9,
-        hash2(i + 11, layer === "back" ? 5 : 17),
+        decoration.name,
+        decoration.tileX,
+        decoration.tileY,
+        decoration.width,
+        decoration.height,
+        decoration.anchorY,
+        decoration.alpha,
+        decoration.seed,
       );
     }
   }
@@ -219,7 +206,7 @@ export class MapArt {
     for (let y = top; y <= endY; y += 1) {
       for (let x = left; x <= right; x += 1) {
         if (!map.isInBounds(x, y)) return false;
-        if (map.isPathTile(x, y) || map.isBuildableTile(x, y)) return false;
+        if (map.isPathTile(x, y)) return false;
         if (tileKey(x, y) === tileKey(map.spawnPosition.x, map.spawnPosition.y))
           return false;
         if (tileKey(x, y) === tileKey(map.basePosition.x, map.basePosition.y))
@@ -227,27 +214,6 @@ export class MapArt {
       }
     }
     return true;
-  }
-
-  drawBuildStoneTile(ctx, map, x, y, highlighted = false) {
-    const image = this.getImage("buildStone");
-    const tile = map.tileSize;
-    const px = x * tile;
-    const py = y * tile;
-
-    if (image) {
-      ctx.drawImage(image, px + 1, py + 1, tile - 2, tile - 2);
-    } else {
-      ctx.fillStyle = "#b9985d";
-      ctx.fillRect(px + 4, py + 4, tile - 8, tile - 8);
-    }
-
-    if (!highlighted) return;
-
-    ctx.fillStyle = map.canBuildAt?.(x, y)
-      ? "rgba(226, 238, 124, 0.16)"
-      : "rgba(135, 67, 54, 0.24)";
-    ctx.fillRect(px + 4, py + 4, tile - 8, tile - 8);
   }
 
   drawBase(ctx, map, time = 0) {
