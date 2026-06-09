@@ -13,7 +13,7 @@ Edit `src/config/towers.js`.
 - Change attack speed: edit `fireRate`, measured as attacks per second.
 - Change projectile speed: edit `projectileSpeed`. Instant and chain towers ignore this value.
 - Tune splash or slow: edit the `special` fields such as `splashRadius`, `slowPercent`, and `slowDuration`.
-- Add a new tower: copy an existing tower object, give it a unique `id`, add a visual `color` and `shape`, then make sure `unlockedTowers` in storage includes that id for existing saves.
+- Add a new tower: copy an existing tower object, give it a unique `id`, add a visual `color` and `shape`. Build availability is determined by tower order: first 3 at castle level 1, next 3 at level 20, next 3 at level 40.
 - Damage types are configured in `src/config/combat.js`: `piercing`, `magic`, `siege`, and `chaos`.
 
 ## Waves

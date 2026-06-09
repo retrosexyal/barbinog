@@ -5,7 +5,7 @@ const DEFAULT_DATA = Object.freeze({
   version: SAVE_VERSION,
   bestScore: 0,
   completedWave: 0,
-  unlockedTowers: ["archer", "cannon", "frost", "magic", "sentinel"],
+  unlockedTowers: ["archer", "cannon", "frost"],
   unlockedCastles: ["human", "elf", "undead"],
   lastSelectedCastleId: "human",
   castleMastery: {},

@@ -25,6 +25,19 @@ import { WaveManager } from "./WaveManager.js";
 const START_GOLD = 500;
 const START_LIVES = 20;
 const SPATIAL_CELL = 128;
+const TOWER_UNLOCKS = Object.freeze([
+  { level: 1, count: 3 },
+  { level: 20, count: 6 },
+  { level: 40, count: 9 },
+]);
+
+function getUnlockedTowerIds(castleLevel = 1) {
+  let unlockedCount = TOWER_UNLOCKS[0].count;
+  for (let i = 0; i < TOWER_UNLOCKS.length; i += 1) {
+    if (castleLevel >= TOWER_UNLOCKS[i].level) unlockedCount = TOWER_UNLOCKS[i].count;
+  }
+  return TOWER_TYPES.slice(0, Math.min(unlockedCount, TOWER_TYPES.length)).map((tower) => tower.id);
+}
 
 export class Game {
   constructor(canvas, options = {}) {
@@ -65,7 +78,7 @@ export class Game {
     this.score = 0;
     this.bestScore = 0;
     this.baseTotalKills = 0;
-    this.unlockedTowers = Object.keys(TOWERS_BY_ID);
+    this.unlockedTowers = getUnlockedTowerIds();
     this.selectedTowerType = null;
     this.selectedTower = null;
     this.selectedEnemy = null;
@@ -102,7 +115,7 @@ export class Game {
     this.leaderboard = new Leaderboard(this.yandex);
     this.bestScore = this.savedData.bestScore || 0;
     this.baseTotalKills = this.savedData.totalKills || 0;
-    this.unlockedTowers = this.savedData.unlockedTowers || this.unlockedTowers;
+    this.refreshUnlockedTowers();
     this.castleSystem.lastSelectedCastleId = this.savedData.lastSelectedCastleId || this.castleSystem.lastSelectedCastleId;
     this.input = new Input(this.canvas, this);
     this.yandex.onPauseResume((paused) => {
@@ -216,6 +229,7 @@ export class Game {
   selectCastle(castleId) {
     this.resetRun(this.castleSelectCompletedWave || 0);
     this.castleSystem.startRun(castleId);
+    this.refreshUnlockedTowers();
     this.state = "playing";
     this.yandex.gameplayStart();
     this.saveProgress();
@@ -398,6 +412,20 @@ export class Game {
     return true;
   }
 
+  refreshUnlockedTowers() {
+    const castleLevel = this.castleSystem?.state?.level || 1;
+    const previous = this.unlockedTowers || [];
+    const next = getUnlockedTowerIds(castleLevel);
+    const changed = previous.length !== next.length || previous.some((towerId, index) => towerId !== next[index]);
+    this.unlockedTowers = next;
+    if (this.selectedTowerType && !this.unlockedTowers.includes(this.selectedTowerType)) {
+      this.selectedTowerType = null;
+      this.towerPlacementDrag = null;
+    }
+    if (changed) this.events.emit("towerUnlocksChanged", this.unlockedTowers);
+    return changed;
+  }
+
   beginTowerDrag(typeId, pointerId, screenX, screenY) {
     if (!this.selectTowerType(typeId)) return false;
     this.towerPlacementDrag = {
@@ -518,7 +546,7 @@ export class Game {
 
   buildTower(typeId, tileX, tileY) {
     const config = TOWERS_BY_ID[typeId];
-    if (!config || this.gold < config.cost || !this.map.canBuildAt(tileX, tileY)) return false;
+    if (!config || !this.unlockedTowers.includes(typeId) || this.gold < config.cost || !this.map.canBuildAt(tileX, tileY)) return false;
     this.gold -= config.cost;
     const tower = new Tower(typeId, tileX, tileY, this.map);
     this.towers.push(tower);

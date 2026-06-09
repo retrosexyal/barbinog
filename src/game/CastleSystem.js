@@ -1,7 +1,7 @@
 import { CASTLE_TYPES, CASTLES_BY_ID, TALENTS_BY_ID } from "../config/castles.js";
 import { distanceSq } from "../utils/math.js";
 
-const MAX_CASTLE_LEVEL = 10;
+const MAX_CASTLE_LEVEL = 60;
 const DEFAULT_CASTLE_ID = "human";
 const CASTLE_MANA_MAX = 100;
 const CASTLE_MANA_REGEN_PER_SECOND = 7;
@@ -185,6 +185,7 @@ export class CastleSystem {
       this.state.level += 1;
       this.state.talentPoints += 1;
       this.state.xpToNextLevel = xpToNextLevel(this.state.level);
+      this.game.refreshUnlockedTowers?.();
       this.game.spawnEffect("text", enemy.x, enemy.y - enemy.radius - 32, {
         text: `Castle Lv.${this.state.level}`,
         color: "#fff0b8",
