@@ -45,10 +45,11 @@ function addUpgradeDamage(range, upgrade) {
 }
 
 export class Tower {
-  constructor(typeId, tileX, tileY, map) {
+  constructor(typeId, tileX, tileY, map, options = {}) {
     this.config = TOWERS_BY_ID[typeId];
     this.id = this.config.id;
     this.name = this.config.name;
+    this.castleId = options.castleId || null;
     this.tileX = tileX;
     this.tileY = tileY;
     const center = map.tileCenter(tileX, tileY);

@@ -1,4 +1,5 @@
 import { MAP_ART_ASSETS, MapArt } from "./MapArt.js";
+import { getTowerSpriteConfig } from "../config/towers.js";
 import { TAU } from "../utils/math.js";
 
 function compareTowerDrawOrder(a, b) {
@@ -45,6 +46,11 @@ export class Renderer {
     const sources = new Set();
     for (const towerType of Object.values(towerTypes)) {
       if (towerType.sprite?.imageSrc) sources.add(towerType.sprite.imageSrc);
+      for (const variants of Object.values(towerType.spriteVariants || {})) {
+        for (const sprite of variants || []) {
+          if (sprite?.imageSrc) sources.add(sprite.imageSrc);
+        }
+      }
       if (towerType.projectileSprite?.imageSrc) sources.add(towerType.projectileSprite.imageSrc);
     }
 
@@ -145,19 +151,19 @@ export class Renderer {
     this.drawMap(ctx, game);
     this.drawCastleZones(ctx, game);
     this.drawRanges(ctx, game);
-    this.drawTowers(ctx, game.towers);
+    this.drawTowers(ctx, game.towers, game);
     this.drawTowerPlacementPreview(ctx, game);
     for (let i = 0; i < game.projectiles.length; i += 1) this.drawProjectile(ctx, game.projectiles[i]);
     for (let i = 0; i < game.enemies.length; i += 1) this.drawEnemy(ctx, game.enemies[i], game);
     for (let i = 0; i < game.effects.length; i += 1) this.drawEffect(ctx, game.effects[i]);
   }
 
-  drawTowers(ctx, towers) {
+  drawTowers(ctx, towers, game) {
     const order = this.towerDrawOrder;
     order.length = 0;
     for (let i = 0; i < towers.length; i += 1) order.push(towers[i]);
     order.sort(compareTowerDrawOrder);
-    for (let i = 0; i < order.length; i += 1) this.drawTower(ctx, order[i]);
+    for (let i = 0; i < order.length; i += 1) this.drawTower(ctx, order[i], game);
   }
 
   drawMap(ctx, game) {
@@ -289,7 +295,7 @@ export class Renderer {
       isBuilding: false,
     };
 
-    if (!this.drawTowerSprite(ctx, tower, { drawLevel: false })) {
+    if (!this.drawTowerSprite(ctx, tower, { drawLevel: false, game })) {
       this.drawTowerPreviewShape(ctx, preview.config);
     }
 
@@ -321,7 +327,7 @@ export class Renderer {
     }
   }
 
-  drawTower(ctx, tower) {
+  drawTower(ctx, tower, game) {
     ctx.save();
     ctx.translate(tower.x, tower.y);
 
@@ -332,7 +338,7 @@ export class Renderer {
       return;
     }
 
-    if (this.drawTowerSprite(ctx, tower)) {
+    if (this.drawTowerSprite(ctx, tower, { game })) {
       ctx.restore();
       this.drawCalls += 1;
       return;
@@ -387,8 +393,21 @@ export class Renderer {
     this.drawCalls += 1;
   }
 
+  getTowerCastleId(tower, game) {
+    return (
+      tower.castleId ||
+      game?.castleSystem?.state?.selectedCastleId ||
+      game?.castleSystem?.lastSelectedCastleId ||
+      "human"
+    );
+  }
+
   drawTowerSprite(ctx, tower, options = {}) {
-    const sprite = tower.config.sprite;
+    const sprite = getTowerSpriteConfig(
+      tower.config,
+      this.getTowerCastleId(tower, options.game),
+      tower.level || 0,
+    );
     const image = sprite?.imageSrc ? this.images.get(sprite.imageSrc)?.image : null;
     if (!image || !image.complete || image.naturalWidth <= 0) return false;
 
@@ -460,7 +479,7 @@ export class Renderer {
   }
 
   hitTestTower(tower, worldX, worldY) {
-    const sprite = tower.config.sprite;
+    const sprite = getTowerSpriteConfig(tower.config, tower.castleId || "human", tower.level || 0);
     const image = !tower.isBuilding && sprite?.imageSrc ? this.images.get(sprite.imageSrc)?.image : null;
 
     if (image && image.complete && image.naturalWidth > 0) {

@@ -548,7 +548,9 @@ export class Game {
     const config = TOWERS_BY_ID[typeId];
     if (!config || !this.unlockedTowers.includes(typeId) || this.gold < config.cost || !this.map.canBuildAt(tileX, tileY)) return false;
     this.gold -= config.cost;
-    const tower = new Tower(typeId, tileX, tileY, this.map);
+    const tower = new Tower(typeId, tileX, tileY, this.map, {
+      castleId: this.castleSystem?.state?.selectedCastleId || this.castleSystem?.lastSelectedCastleId || "human",
+    });
     this.towers.push(tower);
     this.map.occupy(tileX, tileY);
     this.selectedTower = tower;

@@ -15,6 +15,76 @@ export const TARGET_MODES = Object.freeze([
   "strongest",
 ]);
 
+function towerSprite(fileName, drawWidth, drawHeight, anchorY) {
+  return Object.freeze({
+    imageSrc: new URL(`../assets/towers/${fileName}`, import.meta.url).href,
+    drawWidth,
+    drawHeight,
+    anchorY,
+  });
+}
+
+const ARCHER_SPRITES = Object.freeze({
+  human: Object.freeze([
+    towerSprite("archer-tower.png", 58, 68, 0.66),
+    towerSprite("human-archer-tower-2.png", 58, 68, 0.66),
+    towerSprite("human-archer-tower-3.png", 58, 68, 0.66),
+  ]),
+  elf: Object.freeze([
+    towerSprite("elf-archer-tower.png", 58, 68, 0.66),
+    towerSprite("elf-archer-tower-2.png", 58, 68, 0.66),
+    towerSprite("elf-archer-tower-3.png", 58, 68, 0.66),
+  ]),
+  undead: Object.freeze([
+    towerSprite("undead-archer-tower.png", 58, 68, 0.66),
+    towerSprite("undead-archer-tower-2.png", 58, 68, 0.66),
+    towerSprite("undead-archer-tower-3.png", 58, 68, 0.66),
+  ]),
+});
+
+const CANNON_SPRITES = Object.freeze({
+  human: Object.freeze([
+    towerSprite("canon-tower.png", 58, 68, 0.56),
+    towerSprite("human-cannon-tower-2.png", 58, 68, 0.56),
+    towerSprite("human-cannon-tower-3.png", 58, 68, 0.56),
+  ]),
+  elf: Object.freeze([
+    towerSprite("elf-cannon-tower.png", 58, 68, 0.56),
+    towerSprite("elf-cannon-tower-2.png", 58, 68, 0.56),
+    towerSprite("elf-cannon-tower-3.png", 58, 68, 0.56),
+  ]),
+  undead: Object.freeze([
+    towerSprite("undead-cannon-tower.png", 58, 68, 0.56),
+    towerSprite("undead-cannon-tower-2.png", 58, 68, 0.56),
+    towerSprite("undead-cannon-tower-3.png", 58, 68, 0.56),
+  ]),
+});
+
+const FROST_SPRITES = Object.freeze({
+  human: Object.freeze([
+    towerSprite("frost-tower.png", 58, 68, 0.56),
+    towerSprite("human-frost-tower-2.png", 58, 68, 0.56),
+    towerSprite("human-frost-tower-3.png", 58, 68, 0.56),
+  ]),
+  elf: Object.freeze([
+    towerSprite("elf-frost-tower.png", 58, 68, 0.56),
+    towerSprite("elf-frost-tower-2.png", 58, 68, 0.56),
+    towerSprite("elf-frost-tower-3.png", 58, 68, 0.56),
+  ]),
+  undead: Object.freeze([
+    towerSprite("undead-frost-tower.png", 58, 68, 0.56),
+    towerSprite("undead-frost-tower-2.png", 58, 68, 0.56),
+    towerSprite("undead-frost-tower-3.png", 58, 68, 0.56),
+  ]),
+});
+
+export function getTowerSpriteConfig(config, castleId = "human", level = 0) {
+  const variants = config?.spriteVariants?.[castleId] || config?.spriteVariants?.human;
+  if (!variants?.length) return config?.sprite || null;
+  const tier = Math.max(0, Math.min(variants.length - 1, level || 0));
+  return variants[tier] || config?.sprite || null;
+}
+
 export const TOWER_TYPES = Object.freeze([
   {
     id: "archer",
@@ -26,13 +96,8 @@ export const TOWER_TYPES = Object.freeze([
     icon: "A",
     color: "#c48a42",
     shape: "arrow",
-    sprite: {
-      imageSrc: new URL("../assets/towers/archer-tower.png", import.meta.url)
-        .href,
-      drawWidth: 58,
-      drawHeight: 68,
-      anchorY: 0.66,
-    },
+    sprite: ARCHER_SPRITES.human[0],
+    spriteVariants: ARCHER_SPRITES,
     projectileDY: -30,
     projectileSprite: {
       imageSrc: new URL("../assets/projectiles/arrow.png", import.meta.url)
@@ -94,13 +159,8 @@ export const TOWER_TYPES = Object.freeze([
     icon: "C",
     color: "#6e5a43",
     shape: "cannon",
-    sprite: {
-      imageSrc: new URL("../assets/towers/canon-tower.png", import.meta.url)
-        .href,
-      drawWidth: 58,
-      drawHeight: 68,
-      anchorY: 0.56,
-    },
+    sprite: CANNON_SPRITES.human[0],
+    spriteVariants: CANNON_SPRITES,
     projectileSprite: {
       imageSrc: new URL("../assets/projectiles/cannonball.png", import.meta.url)
         .href,
@@ -163,13 +223,8 @@ export const TOWER_TYPES = Object.freeze([
     icon: "F",
     color: "#6fd4ff",
     shape: "crystal",
-    sprite: {
-      imageSrc: new URL("../assets/towers/frost-tower.png", import.meta.url)
-        .href,
-      drawWidth: 58,
-      drawHeight: 68,
-      anchorY: 0.56,
-    },
+    sprite: FROST_SPRITES.human[0],
+    spriteVariants: FROST_SPRITES,
     projectileSprite: {
       imageSrc: new URL(
         "../assets/projectiles/frost-shard.png",

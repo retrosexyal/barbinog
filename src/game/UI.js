@@ -1,5 +1,5 @@
 import { formatDamageRange, getArmorTypeLabel, getAttackTypeLabel } from "../config/combat.js";
-import { TOWER_TYPES, TOWERS_BY_ID } from "../config/towers.js";
+import { getTowerSpriteConfig, TOWER_TYPES, TOWERS_BY_ID } from "../config/towers.js";
 import { clamp, formatCompact, rectContains } from "../utils/math.js";
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -680,18 +680,28 @@ export class UI {
     }
   }
 
-  getTowerIconImage(game, tower) {
+  getTowerIconSprite(game, tower) {
     const config = tower?.config || tower;
-    const source = config?.sprite?.imageSrc;
+    const castleId =
+      tower?.castleId ||
+      game.castleSystem?.state?.selectedCastleId ||
+      game.castleSystem?.lastSelectedCastleId ||
+      "human";
+    return getTowerSpriteConfig(config, castleId, tower?.level || 0);
+  }
+
+  getTowerIconImage(game, tower) {
+    const sprite = this.getTowerIconSprite(game, tower);
+    const source = sprite?.imageSrc;
     const image = source ? game.renderer.images.get(source)?.image : null;
     return image && image.complete && image.naturalWidth > 0 ? image : null;
   }
 
   drawTowerIcon(ctx, game, tower, x, y, radius, size = 13) {
     const config = tower?.config || tower;
-    const image = this.getTowerIconImage(game, config);
+    const image = this.getTowerIconImage(game, tower);
     if (image) {
-      const sprite = config.sprite || {};
+      const sprite = this.getTowerIconSprite(game, tower) || config.sprite || {};
       const sourceWidth = sprite.drawWidth || image.naturalWidth;
       const sourceHeight = sprite.drawHeight || image.naturalHeight;
       const aspect = sourceWidth / Math.max(1, sourceHeight);
