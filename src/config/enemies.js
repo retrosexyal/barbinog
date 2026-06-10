@@ -1,3 +1,80 @@
+function createDirectionalEnemyAnimations(sprite, sizing) {
+  const runFps = sizing.runFps || 10;
+  const idleFps = sizing.idleFps || 5;
+  return {
+    idle: {
+      imageSrc: new URL(`../assets/enemies/${sprite}-idle.png`, import.meta.url).href,
+      frames: 4,
+      frameWidth: 300,
+      frameHeight: 300,
+      fps: idleFps,
+      drawWidth: sizing.idle.drawWidth,
+      drawHeight: sizing.idle.drawHeight,
+      anchorY: sizing.idle.anchorY,
+    },
+    run: {
+      imageSrc: new URL(`../assets/enemies/${sprite}-run.png`, import.meta.url).href,
+      frames: 6,
+      frameWidth: 360,
+      frameHeight: 300,
+      fps: runFps,
+      drawWidth: sizing.run.drawWidth,
+      drawHeight: sizing.run.drawHeight,
+      anchorY: sizing.run.anchorY,
+    },
+    runDown: {
+      imageSrc: new URL(`../assets/enemies/${sprite}-run-down.png`, import.meta.url).href,
+      frames: 6,
+      frameWidth: 300,
+      frameHeight: 300,
+      fps: runFps,
+      drawWidth: sizing.runDown.drawWidth,
+      drawHeight: sizing.runDown.drawHeight,
+      anchorY: sizing.runDown.anchorY,
+      flipX: false,
+    },
+    runUp: {
+      imageSrc: new URL(`../assets/enemies/${sprite}-run-up.png`, import.meta.url).href,
+      frames: 6,
+      frameWidth: 300,
+      frameHeight: 300,
+      fps: runFps,
+      drawWidth: sizing.runUp.drawWidth,
+      drawHeight: sizing.runUp.drawHeight,
+      anchorY: sizing.runUp.anchorY,
+      flipX: false,
+    },
+  };
+}
+
+const ARMORED_BEETLE_ANIMATIONS = createDirectionalEnemyAnimations("armored-beetle", {
+  idle: { drawWidth: 58, drawHeight: 48, anchorY: 0.82 },
+  run: { drawWidth: 68, drawHeight: 47, anchorY: 0.82 },
+  runDown: { drawWidth: 56, drawHeight: 58, anchorY: 0.82 },
+  runUp: { drawWidth: 56, drawHeight: 58, anchorY: 0.82 },
+});
+
+const GLASS_ELEMENTAL_ANIMATIONS = createDirectionalEnemyAnimations("glass-elemental", {
+  idle: { drawWidth: 48, drawHeight: 54, anchorY: 0.84 },
+  run: { drawWidth: 56, drawHeight: 48, anchorY: 0.82 },
+  runDown: { drawWidth: 48, drawHeight: 56, anchorY: 0.84 },
+  runUp: { drawWidth: 48, drawHeight: 56, anchorY: 0.84 },
+});
+
+const GLASS_SHARD_ANIMATIONS = createDirectionalEnemyAnimations("glass-shard", {
+  idle: { drawWidth: 32, drawHeight: 28, anchorY: 0.84 },
+  run: { drawWidth: 36, drawHeight: 24, anchorY: 0.84 },
+  runDown: { drawWidth: 30, drawHeight: 32, anchorY: 0.84 },
+  runUp: { drawWidth: 30, drawHeight: 32, anchorY: 0.84 },
+});
+
+const BLACK_TRACT_BANDIT_ANIMATIONS = createDirectionalEnemyAnimations("black-tract-bandit", {
+  idle: { drawWidth: 42, drawHeight: 54, anchorY: 0.86 },
+  run: { drawWidth: 54, drawHeight: 44, anchorY: 0.82 },
+  runDown: { drawWidth: 44, drawHeight: 54, anchorY: 0.86 },
+  runUp: { drawWidth: 44, drawHeight: 54, anchorY: 0.86 },
+});
+
 export const ENEMY_TYPES = Object.freeze({
   dog: {
     id: "dog",
@@ -348,5 +425,89 @@ export const ENEMY_TYPES = Object.freeze({
     color: "#b65353",
     sprite: "boss",
     traits: ["boss", "regen"],
+  },
+  armoredBeetle: {
+    id: "armoredBeetle",
+    name: "Armored Beetle",
+    hp: 118,
+    speed: 44,
+    armorType: "heavy",
+    armor: 8,
+    rewardGold: 15,
+    damageToBase: 2,
+    color: "#6f5637",
+    sprite: "hex",
+    traits: ["armored"],
+    animations: ARMORED_BEETLE_ANIMATIONS,
+  },
+  glassElemental: {
+    id: "glassElemental",
+    name: "Glass Elemental",
+    hp: 72,
+    speed: 64,
+    armorType: "magical",
+    armor: 0,
+    rewardGold: 14,
+    damageToBase: 2,
+    color: "#8ec7c1",
+    sprite: "diamond",
+    traits: ["magical"],
+    animations: GLASS_ELEMENTAL_ANIMATIONS,
+  },
+  glassShard: {
+    id: "glassShard",
+    name: "Glass Shard",
+    hp: 30,
+    speed: 86,
+    armorType: "unarmored",
+    armor: 0,
+    rewardGold: 6,
+    damageToBase: 1,
+    color: "#c7e7dc",
+    sprite: "small",
+    traits: ["swarm"],
+    animations: GLASS_SHARD_ANIMATIONS,
+  },
+  blackTractBandit: {
+    id: "blackTractBandit",
+    name: "Black Tract Bandit",
+    hp: 88,
+    speed: 62,
+    armorType: "light",
+    armor: 3,
+    rewardGold: 12,
+    damageToBase: 1,
+    color: "#7f5140",
+    sprite: "circle",
+    traits: [],
+    animations: BLACK_TRACT_BANDIT_ANIMATIONS,
+  },
+  blackTractRunner: {
+    id: "blackTractRunner",
+    name: "Black Tract Runner",
+    hp: 62,
+    speed: 86,
+    armorType: "unarmored",
+    armor: 1,
+    rewardGold: 11,
+    damageToBase: 1,
+    color: "#8f5b43",
+    sprite: "circle",
+    traits: ["fast"],
+    animations: BLACK_TRACT_BANDIT_ANIMATIONS,
+  },
+  blackTractGuard: {
+    id: "blackTractGuard",
+    name: "Black Tract Guard",
+    hp: 132,
+    speed: 48,
+    armorType: "heavy",
+    armor: 7,
+    rewardGold: 16,
+    damageToBase: 2,
+    color: "#5f4a3d",
+    sprite: "hex",
+    traits: ["armored"],
+    animations: BLACK_TRACT_BANDIT_ANIMATIONS,
   },
 });

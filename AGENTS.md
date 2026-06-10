@@ -6,6 +6,29 @@ This is a pure JavaScript HTML5 Canvas tower-defense game. Enemy art is drawn by
 
 The main visual reference is `scetch.png` in the repository root. It establishes the target style: hand-painted fantasy forest tower-defense art, warm earthy colors, crisp readable small-game silhouettes, and slightly top-down map readability.
 
+## Project Quick Facts
+
+- Entry point: `index.html` loads `src/main.js` as an ES module.
+- Core game orchestration: `src/game/Game.js`.
+- Enemy movement and animation-state selection: `src/game/Enemy.js`.
+- Enemy rendering and sprite-sheet playback: `src/game/Renderer.js`.
+- Enemy config, balance, sprite metadata, and animation URLs: `src/config/enemies.js`.
+- Wave composition: `src/config/waves.js`.
+- Tower config: `src/config/towers.js`.
+- Combat multipliers and armor types: `src/config/combat.js`.
+- Map/path/buildable layout: `src/config/map.js`.
+- Enemy sprite assets: `src/assets/enemies/`.
+- Tower sprite assets: `src/assets/towers/`.
+- Map art assets: `src/assets/map/`.
+- Lore and planned wave themes: `lor.md`.
+- Balance iteration notes: `BALANCE_NOTES.md`.
+
+This repo currently has no `package.json`; use the bundled Node executable for syntax checks. The game can be served as static files, but ES modules usually need an HTTP server rather than opening `index.html` directly from disk.
+
+Current sprite-backed enemy ids include `dog`, `boar`, `walrus`, `murloc`, `flyingSheep`, `armoredBeetle`, `glassElemental`, `glassShard`, `blackTractBandit`, `blackTractRunner`, and `blackTractGuard`. Older procedural fallback ids still exist for balance/prototyping: `basic`, `fast`, `armored`, `swarm`, and `boss`.
+
+Current implemented wave count is 15. Waves 13-15 follow `lor.md`: armored beetles, glass elementals/shards, and Black Tract bandits.
+
 Current dog enemy sprite references:
 
 - `src/assets/enemies/dog-idle.png`
@@ -27,6 +50,19 @@ When asked to create sprites for a path-following mob, do not create only a hori
 Use horizontal one-row sprite sheets. Keep every frame in equal-sized cells, centered, full body visible, with consistent scale and baseline.
 
 Avoid text, labels, UI, cast shadows, contact shadows, reflections, extra characters, or background detail inside sprite sheets.
+
+## Biped Animation Requirements
+
+For any two-legged or humanoid path-following mob, the side-view `run` sheet must clearly show leg alternation. Do not accept six frames where only the torso bobs or the legs stay in nearly the same silhouette.
+
+At minimum, a 6-frame side-run loop for a biped should alternate readable leg poses:
+
+- Frames `1`, `3`, and `5`: one support/front leg is nearly vertical under the body, with the other leg trailing or tucked back.
+- Frames `2`, `4`, and `6`: the next step has the front leg extended much more horizontally forward, with the foot clearly out in front.
+
+The difference between these two poses must remain visible at in-game draw size, not only when zoomed in. Keep the upper body, weapon, shield, head, and overall silhouette stable enough that the motion reads as running rather than shape-shifting.
+
+When prompting image generation for biped enemies, explicitly describe this vertical-leg / horizontal-forward-leg alternation. After generation, inspect the side-run sheet specifically for leg motion before accepting it. If the generated run cycle is too subtle, regenerate the `run` sheet or edit only that sheet before wiring it into the game.
 
 ## Image Generation Workflow
 

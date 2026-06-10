@@ -75,4 +75,29 @@ export const WAVES = Object.freeze([
     ],
     rewardOnComplete: 320,
   },
+  {
+    wave: 13,
+    groups: [
+      { enemyId: "armoredBeetle", count: 20, spawnInterval: 0.58, delayBeforeNextGroup: 0.8 },
+      { enemyId: "murloc", count: 18, spawnInterval: 0.34, delayBeforeNextGroup: 0 },
+    ],
+    rewardOnComplete: 380,
+  },
+  {
+    wave: 14,
+    groups: [
+      { enemyId: "glassElemental", count: 18, spawnInterval: 0.52, delayBeforeNextGroup: 0.7 },
+      { enemyId: "glassShard", count: 32, spawnInterval: 0.2, delayBeforeNextGroup: 0 },
+    ],
+    rewardOnComplete: 440,
+  },
+  {
+    wave: 15,
+    groups: [
+      { enemyId: "blackTractRunner", count: 18, spawnInterval: 0.28, delayBeforeNextGroup: 0.6 },
+      { enemyId: "blackTractBandit", count: 26, spawnInterval: 0.38, delayBeforeNextGroup: 0.7 },
+      { enemyId: "blackTractGuard", count: 12, spawnInterval: 0.56, delayBeforeNextGroup: 0 },
+    ],
+    rewardOnComplete: 520,
+  },
 ]);
