@@ -1,5 +1,5 @@
 import { formatDamageRange, getArmorTypeLabel, getAttackTypeLabel } from "../config/combat.js";
-import { getTowerSpriteConfig, TOWER_TYPES, TOWERS_BY_ID } from "../config/towers.js";
+import { getTowerDisplayName as getTowerConfigDisplayName, getTowerSpriteConfig, TOWER_TYPES, TOWERS_BY_ID } from "../config/towers.js";
 import { clamp, formatCompact, rectContains } from "../utils/math.js";
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -665,7 +665,7 @@ export class UI {
       const tower = TOWER_TYPES[i];
       const rect = { x, y: y + i * (rowH + gap), w, h: rowH };
       const enabled = game.unlockedTowers.includes(tower.id) && game.gold >= tower.cost;
-      const name = tower.name.replace(" Tower", "").replace(" Post", "");
+      const name = this.getTowerDisplayName(game, tower).replace(" Tower", "").replace(" Post", "");
       this.addButton("selectTowerType", rect, `${name} ${tower.cost}`, {
         meta: { typeId: tower.id },
         enabled,
@@ -688,6 +688,16 @@ export class UI {
       game.castleSystem?.lastSelectedCastleId ||
       "human";
     return getTowerSpriteConfig(config, castleId, tower?.level || 0);
+  }
+
+  getTowerDisplayName(game, tower) {
+    const config = tower?.config || tower;
+    const castleId =
+      tower?.castleId ||
+      game.castleSystem?.state?.selectedCastleId ||
+      game.castleSystem?.lastSelectedCastleId ||
+      "human";
+    return getTowerConfigDisplayName(config, castleId);
   }
 
   getTowerIconImage(game, tower) {
@@ -762,7 +772,8 @@ export class UI {
       return;
     }
 
-    const title = game.selectedTower ? `${tower.name} Lv.${tower.level + 1}` : tower.name;
+    const towerName = this.getTowerDisplayName(game, tower);
+    const title = game.selectedTower ? `${towerName} Lv.${tower.level + 1}` : towerName;
     this.drawTowerIcon(ctx, game, tower, x + 28, y + 32, 17, 15);
     drawFittedText(ctx, title, x + 54, y + 24, w - 64, 16, "#f7edd5", "left");
     if (!game.selectedTower && Number.isFinite(tower.cost)) {
@@ -946,7 +957,8 @@ export class UI {
       const rowY = listY + i * (rowH + gap);
       const canAfford = game.gold >= tower.cost;
       const isSelected = game.selectedTowerType === tower.id;
-      this.addButton("selectTowerType", { x: x + 6, y: rowY, w: w - 12, h: rowH }, `${tower.name}  ${tower.cost}`, {
+      const towerName = this.getTowerDisplayName(game, tower);
+      this.addButton("selectTowerType", { x: x + 6, y: rowY, w: w - 12, h: rowH }, `${towerName}  ${tower.cost}`, {
         meta: { typeId: tower.id },
         enabled: game.unlockedTowers.includes(tower.id) && canAfford,
         kind: isSelected ? "gold" : "default",
@@ -984,7 +996,8 @@ export class UI {
       return;
     }
 
-    const name = game.selectedTower ? `${tower.name} Lv.${tower.level + 1}` : tower.name;
+    const towerName = this.getTowerDisplayName(game, tower);
+    const name = game.selectedTower ? `${towerName} Lv.${tower.level + 1}` : towerName;
     const stats = game.selectedTower?.isBuilding ? getTowerBuildText(tower) : getTowerStatsText(tower);
 
     if (!game.selectedTower || h < 54) {
@@ -1174,7 +1187,8 @@ export class UI {
       const tower = TOWER_TYPES[i];
       const rect = { x: x + i * (buttonW + gap), y, w: buttonW, h: buttonH };
       const enabled = game.unlockedTowers.includes(tower.id) && game.gold >= tower.cost;
-      this.addButton("selectTowerType", rect, compact ? tower.icon : tower.name.replace(" Tower", ""), {
+      const towerName = this.getTowerDisplayName(game, tower);
+      this.addButton("selectTowerType", rect, compact ? tower.icon : towerName.replace(" Tower", ""), {
         meta: { typeId: tower.id },
         enabled,
         kind: game.selectedTowerType === tower.id ? "gold" : "default",
@@ -1200,7 +1214,8 @@ export class UI {
       return;
     }
 
-    const name = game.selectedTower ? `${tower.name} Lv.${tower.level + 1}` : tower.name;
+    const towerName = this.getTowerDisplayName(game, tower);
+    const name = game.selectedTower ? `${towerName} Lv.${tower.level + 1}` : towerName;
     drawFittedText(ctx, name, x + 12, y + 18, w - 24, 16, "#f7edd5", "left");
 
     const stats = game.selectedTower?.isBuilding ? getTowerBuildText(tower) : getTowerStatsText(tower);

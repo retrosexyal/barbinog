@@ -20,84 +20,57 @@ export const WAVES = Object.freeze([
   },
   {
     wave: 6,
-    groups: [
-      { enemyId: "fast", count: 18, spawnInterval: 0.42, delayBeforeNextGroup: 1 },
-      { enemyId: "armored", count: 8, spawnInterval: 0.85, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "ratfolkScavenger", count: 24, spawnInterval: 0.32, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 95,
   },
   {
     wave: 7,
-    groups: [
-      { enemyId: "basic", count: 24, spawnInterval: 0.42, delayBeforeNextGroup: 1 },
-      { enemyId: "swarm", count: 24, spawnInterval: 0.25, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "rustyShieldMercenary", count: 22, spawnInterval: 0.48, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 110,
   },
   {
     wave: 8,
-    groups: [
-      { enemyId: "armored", count: 14, spawnInterval: 0.72, delayBeforeNextGroup: 1 },
-      { enemyId: "fast", count: 18, spawnInterval: 0.38, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "goblinSapper", count: 18, spawnInterval: 0.46, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 130,
   },
   {
     wave: 9,
-    groups: [
-      { enemyId: "boss", count: 1, spawnInterval: 1, delayBeforeNextGroup: 1.4 },
-      { enemyId: "swarm", count: 28, spawnInterval: 0.24, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "swampShaman", count: 18, spawnInterval: 0.52, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 170,
   },
   {
     wave: 10,
-    groups: [
-      { enemyId: "armored", count: 18, spawnInterval: 0.62, delayBeforeNextGroup: 1 },
-      { enemyId: "fast", count: 24, spawnInterval: 0.33, delayBeforeNextGroup: 0.5 },
-      { enemyId: "basic", count: 22, spawnInterval: 0.4, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "boneMaskWolf", count: 24, spawnInterval: 0.34, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 210,
   },
   {
     wave: 11,
-    groups: [
-      { enemyId: "swarm", count: 44, spawnInterval: 0.18, delayBeforeNextGroup: 0.8 },
-      { enemyId: "armored", count: 16, spawnInterval: 0.58, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "stoneskinTroll", count: 10, spawnInterval: 0.9, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 250,
   },
   {
     wave: 12,
-    groups: [
-      { enemyId: "boss", count: 2, spawnInterval: 3.2, delayBeforeNextGroup: 1 },
-      { enemyId: "fast", count: 32, spawnInterval: 0.28, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "riftHarpy", count: 20, spawnInterval: 0.36, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 320,
   },
   {
     wave: 13,
-    groups: [
-      { enemyId: "armoredBeetle", count: 20, spawnInterval: 0.58, delayBeforeNextGroup: 0.8 },
-      { enemyId: "murloc", count: 18, spawnInterval: 0.34, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "armoredBeetle", count: 20, spawnInterval: 0.58, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 380,
   },
   {
     wave: 14,
-    groups: [
-      { enemyId: "glassElemental", count: 18, spawnInterval: 0.52, delayBeforeNextGroup: 0.7 },
-      { enemyId: "glassShard", count: 32, spawnInterval: 0.2, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "glassElemental", count: 18, spawnInterval: 0.52, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 440,
   },
   {
     wave: 15,
-    groups: [
-      { enemyId: "blackTractRunner", count: 18, spawnInterval: 0.28, delayBeforeNextGroup: 0.6 },
-      { enemyId: "blackTractBandit", count: 26, spawnInterval: 0.38, delayBeforeNextGroup: 0.7 },
-      { enemyId: "blackTractGuard", count: 12, spawnInterval: 0.56, delayBeforeNextGroup: 0 },
-    ],
+    groups: [{ enemyId: "blackTractBandit", count: 26, spawnInterval: 0.38, delayBeforeNextGroup: 0 }],
     rewardOnComplete: 520,
+  },
+  {
+    wave: 16,
+    groups: [{ enemyId: "boss", count: 1, spawnInterval: 1, delayBeforeNextGroup: 0 }],
+    rewardOnComplete: 680,
   },
 ]);

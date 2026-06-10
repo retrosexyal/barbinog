@@ -1,5 +1,5 @@
 import { normalizeDamageRange, rollDamage } from "../config/combat.js";
-import { TOWERS_BY_ID } from "../config/towers.js";
+import { getTowerDisplayName, TOWERS_BY_ID } from "../config/towers.js";
 import { distanceSq } from "../utils/math.js";
 
 function cloneSpecial(special) {
@@ -48,8 +48,8 @@ export class Tower {
   constructor(typeId, tileX, tileY, map, options = {}) {
     this.config = TOWERS_BY_ID[typeId];
     this.id = this.config.id;
-    this.name = this.config.name;
     this.castleId = options.castleId || null;
+    this.name = getTowerDisplayName(this.config, this.castleId || "human");
     this.tileX = tileX;
     this.tileY = tileY;
     this.footprint = map.towerFootprint || { width: 1, height: 1 };

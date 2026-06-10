@@ -75,6 +75,100 @@ const BLACK_TRACT_BANDIT_ANIMATIONS = createDirectionalEnemyAnimations("black-tr
   runUp: { drawWidth: 44, drawHeight: 54, anchorY: 0.86 },
 });
 
+const RATFOLK_SCAVENGER_ANIMATIONS = createDirectionalEnemyAnimations("ratfolk-scavenger", {
+  idle: { drawWidth: 58, drawHeight: 58, anchorY: 0.82 },
+  run: { drawWidth: 78, drawHeight: 58, anchorY: 0.82 },
+  runDown: { drawWidth: 58, drawHeight: 62, anchorY: 0.84 },
+  runUp: { drawWidth: 58, drawHeight: 62, anchorY: 0.84 },
+});
+
+const RUSTY_SHIELD_MERCENARY_ANIMATIONS = createDirectionalEnemyAnimations("rusty-shield-mercenary", {
+  idle: { drawWidth: 60, drawHeight: 72, anchorY: 0.86 },
+  run: { drawWidth: 82, drawHeight: 68, anchorY: 0.84 },
+  runDown: { drawWidth: 64, drawHeight: 72, anchorY: 0.86 },
+  runUp: { drawWidth: 64, drawHeight: 72, anchorY: 0.86 },
+});
+
+const GOBLIN_SAPPER_ANIMATIONS = createDirectionalEnemyAnimations("goblin-sapper", {
+  idle: { drawWidth: 58, drawHeight: 62, anchorY: 0.84 },
+  run: { drawWidth: 80, drawHeight: 60, anchorY: 0.82 },
+  runDown: { drawWidth: 58, drawHeight: 64, anchorY: 0.84 },
+  runUp: { drawWidth: 58, drawHeight: 64, anchorY: 0.84 },
+});
+
+const SWAMP_SHAMAN_ANIMATIONS = createDirectionalEnemyAnimations("swamp-shaman", {
+  idle: { drawWidth: 64, drawHeight: 72, anchorY: 0.86 },
+  run: { drawWidth: 86, drawHeight: 68, anchorY: 0.84 },
+  runDown: { drawWidth: 66, drawHeight: 74, anchorY: 0.86 },
+  runUp: { drawWidth: 66, drawHeight: 74, anchorY: 0.86 },
+});
+
+const BONE_MASK_WOLF_ANIMATIONS = createDirectionalEnemyAnimations("bone-mask-wolf", {
+  idle: { drawWidth: 68, drawHeight: 56, anchorY: 0.82 },
+  run: { drawWidth: 94, drawHeight: 58, anchorY: 0.82 },
+  runDown: { drawWidth: 68, drawHeight: 66, anchorY: 0.84 },
+  runUp: { drawWidth: 68, drawHeight: 66, anchorY: 0.84 },
+});
+
+const STONESKIN_TROLL_ANIMATIONS = createDirectionalEnemyAnimations("stoneskin-troll", {
+  idle: { drawWidth: 78, drawHeight: 92, anchorY: 0.88 },
+  run: { drawWidth: 104, drawHeight: 88, anchorY: 0.86 },
+  runDown: { drawWidth: 82, drawHeight: 96, anchorY: 0.88 },
+  runUp: { drawWidth: 82, drawHeight: 96, anchorY: 0.88 },
+});
+
+const RIFT_HARPY_ANIMATIONS = createDirectionalEnemyAnimations("rift-harpy", {
+  idle: { drawWidth: 78, drawHeight: 64, anchorY: 0.74 },
+  run: { drawWidth: 104, drawHeight: 68, anchorY: 0.74 },
+  runDown: { drawWidth: 88, drawHeight: 72, anchorY: 0.74 },
+  runUp: { drawWidth: 88, drawHeight: 72, anchorY: 0.74 },
+});
+
+const ANCIENT_CAPTAIN_ANIMATIONS = {
+  idle: {
+    imageSrc: new URL("../assets/enemies/ancient-captain-idle.png", import.meta.url).href,
+    frames: 4,
+    frameWidth: 420,
+    frameHeight: 420,
+    fps: 5,
+    drawWidth: 118,
+    drawHeight: 118,
+    anchorY: 0.88,
+  },
+  run: {
+    imageSrc: new URL("../assets/enemies/ancient-captain-run.png", import.meta.url).href,
+    frames: 6,
+    frameWidth: 500,
+    frameHeight: 420,
+    fps: 8,
+    drawWidth: 142,
+    drawHeight: 118,
+    anchorY: 0.86,
+  },
+  runDown: {
+    imageSrc: new URL("../assets/enemies/ancient-captain-run-down.png", import.meta.url).href,
+    frames: 6,
+    frameWidth: 420,
+    frameHeight: 420,
+    fps: 8,
+    drawWidth: 116,
+    drawHeight: 126,
+    anchorY: 0.88,
+    flipX: false,
+  },
+  runUp: {
+    imageSrc: new URL("../assets/enemies/ancient-captain-run-up.png", import.meta.url).href,
+    frames: 6,
+    frameWidth: 420,
+    frameHeight: 420,
+    fps: 8,
+    drawWidth: 116,
+    drawHeight: 126,
+    anchorY: 0.88,
+    flipX: false,
+  },
+};
+
 export const ENEMY_TYPES = Object.freeze({
   dog: {
     id: "dog",
@@ -425,6 +519,105 @@ export const ENEMY_TYPES = Object.freeze({
     color: "#b65353",
     sprite: "boss",
     traits: ["boss", "regen"],
+    animations: ANCIENT_CAPTAIN_ANIMATIONS,
+  },
+  ratfolkScavenger: {
+    id: "ratfolkScavenger",
+    name: "Ratfolk Scavenger",
+    hp: 54,
+    speed: 96,
+    armorType: "unarmored",
+    armor: 0,
+    rewardGold: 9,
+    damageToBase: 1,
+    color: "#8c5f46",
+    sprite: "diamond",
+    traits: ["fast"],
+    animations: RATFOLK_SCAVENGER_ANIMATIONS,
+  },
+  rustyShieldMercenary: {
+    id: "rustyShieldMercenary",
+    name: "Rusty Shield Mercenary",
+    hp: 96,
+    speed: 54,
+    armorType: "light",
+    armor: 3,
+    rewardGold: 12,
+    damageToBase: 1,
+    color: "#8f6a45",
+    sprite: "circle",
+    traits: [],
+    animations: RUSTY_SHIELD_MERCENARY_ANIMATIONS,
+  },
+  goblinSapper: {
+    id: "goblinSapper",
+    name: "Goblin Sapper",
+    hp: 62,
+    speed: 78,
+    armorType: "unarmored",
+    armor: 0,
+    rewardGold: 13,
+    damageToBase: 3,
+    color: "#738a3c",
+    sprite: "diamond",
+    traits: ["demolition"],
+    animations: GOBLIN_SAPPER_ANIMATIONS,
+  },
+  swampShaman: {
+    id: "swampShaman",
+    name: "Swamp Shaman",
+    hp: 74,
+    speed: 58,
+    armorType: "magical",
+    armor: 1,
+    rewardGold: 14,
+    damageToBase: 1,
+    color: "#34856f",
+    sprite: "circle",
+    traits: ["support", "magical"],
+    animations: SWAMP_SHAMAN_ANIMATIONS,
+  },
+  boneMaskWolf: {
+    id: "boneMaskWolf",
+    name: "Bone-Mask Wolf",
+    hp: 86,
+    speed: 90,
+    armorType: "unarmored",
+    armor: 1,
+    rewardGold: 13,
+    damageToBase: 1,
+    color: "#66533e",
+    sprite: "diamond",
+    traits: ["fast"],
+    animations: BONE_MASK_WOLF_ANIMATIONS,
+  },
+  stoneskinTroll: {
+    id: "stoneskinTroll",
+    name: "Stoneskin Troll",
+    hp: 240,
+    speed: 34,
+    armorType: "heavy",
+    armor: 10,
+    rewardGold: 24,
+    damageToBase: 3,
+    color: "#777866",
+    sprite: "hex",
+    traits: ["armored"],
+    animations: STONESKIN_TROLL_ANIMATIONS,
+  },
+  riftHarpy: {
+    id: "riftHarpy",
+    name: "Rift Harpy",
+    hp: 64,
+    speed: 96,
+    armorType: "magical",
+    armor: 0,
+    rewardGold: 15,
+    damageToBase: 1,
+    color: "#8c5d35",
+    sprite: "diamond",
+    traits: ["flying", "fast"],
+    animations: RIFT_HARPY_ANIMATIONS,
   },
   armoredBeetle: {
     id: "armoredBeetle",

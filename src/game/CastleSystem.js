@@ -1,4 +1,8 @@
-import { CASTLE_TYPES, CASTLES_BY_ID, TALENTS_BY_ID } from "../config/castles.js";
+import {
+  CASTLE_TYPES,
+  CASTLES_BY_ID,
+  TALENTS_BY_ID,
+} from "../config/castles.js";
 import { distanceSq } from "../utils/math.js";
 
 const MAX_CASTLE_LEVEL = 60;
@@ -26,7 +30,7 @@ function createRuntimeState(castleId) {
     level: 1,
     xp: 0,
     xpToNextLevel: 50,
-    talentPoints: 0,
+    talentPoints: 1,
     unlockedTalentIds: [],
     activeCooldowns: {},
     mana: {
@@ -108,7 +112,10 @@ export class CastleSystem {
   updateMana(dt) {
     const mana = this.state?.mana;
     if (!mana) return;
-    const regen = Math.max(0, mana.regenPerSecond + this.getCastleStat("manaRegenBonus", 0));
+    const regen = Math.max(
+      0,
+      mana.regenPerSecond + this.getCastleStat("manaRegenBonus", 0),
+    );
     mana.amount = Math.min(mana.max, mana.amount + regen * dt);
   }
 
@@ -136,12 +143,26 @@ export class CastleSystem {
         zones.splice(i, 1);
         continue;
       }
-      const enemies = this.game.queryEnemiesInRange(zone.x, zone.y, zone.radius * zone.radius, []);
+      const enemies = this.game.queryEnemiesInRange(
+        zone.x,
+        zone.y,
+        zone.radius * zone.radius,
+        [],
+      );
       for (let j = 0; j < enemies.length; j += 1) {
         const enemy = enemies[j];
-        if (zone.dps) enemy.applyDamage(zone.dps * dt, zone.damageType || "chaos", this.game, null, false);
-        if (enemy.active && zone.slowPercent) enemy.applySlow(zone.slowPercent, 0.35);
-        if (enemy.active && zone.poisonDps) enemy.applyPoison(zone.poisonDps, 1);
+        if (zone.dps)
+          enemy.applyDamage(
+            zone.dps * dt,
+            zone.damageType || "chaos",
+            this.game,
+            null,
+            false,
+          );
+        if (enemy.active && zone.slowPercent)
+          enemy.applySlow(zone.slowPercent, 0.35);
+        if (enemy.active && zone.poisonDps)
+          enemy.applyPoison(zone.poisonDps, 1);
       }
     }
   }
@@ -180,7 +201,10 @@ export class CastleSystem {
       vy: -18,
     });
 
-    while (this.state.level < MAX_CASTLE_LEVEL && this.state.xp >= this.state.xpToNextLevel) {
+    while (
+      this.state.level < MAX_CASTLE_LEVEL &&
+      this.state.xp >= this.state.xpToNextLevel
+    ) {
       this.state.xp -= this.state.xpToNextLevel;
       this.state.level += 1;
       this.state.talentPoints += 1;
@@ -208,7 +232,10 @@ export class CastleSystem {
   addResource(amount) {
     const resource = this.state?.uniqueResource;
     if (!resource) return;
-    resource.amount = Math.min(resource.max || Number.MAX_SAFE_INTEGER, resource.amount + amount);
+    resource.amount = Math.min(
+      resource.max || Number.MAX_SAFE_INTEGER,
+      resource.amount + amount,
+    );
   }
 
   spendResource(amount) {
@@ -231,7 +258,10 @@ export class CastleSystem {
     if (this.selectedCastle?.id === "human") {
       this.applyHumanJudgementKill(enemy);
     }
-    if (this.getCastleStat("poisonSpreadOnDeath", 0) > 0 && enemy.poisonTimer > 0) {
+    if (
+      this.getCastleStat("poisonSpreadOnDeath", 0) > 0 &&
+      enemy.poisonTimer > 0
+    ) {
       this.spreadPoison(enemy);
     }
     if (enemy.judgementTimer > 0) {
@@ -240,7 +270,10 @@ export class CastleSystem {
   }
 
   applyHumanJudgementKill() {
-    const interval = Math.max(3, 6 + this.getCastleStat("judgementIntervalBonus", 0));
+    const interval = Math.max(
+      3,
+      6 + this.getCastleStat("judgementIntervalBonus", 0),
+    );
     if (this.state.killCount % interval !== 0) return;
     const target = findStrongestEnemy(this.game.enemies);
     if (!target) return;
@@ -248,14 +281,24 @@ export class CastleSystem {
       0.16 + this.getCastleStat("judgementVulnerabilityBonus", 0),
       8 + this.getCastleStat("judgementDurationBonus", 0),
     );
-    this.game.spawnEffect("ring", target.x, target.y, { radius: target.radius + 24, color: "#fff0a6", duration: 0.45 });
+    this.game.spawnEffect("ring", target.x, target.y, {
+      radius: target.radius + 24,
+      color: "#fff0a6",
+      duration: 0.45,
+    });
   }
 
   spreadPoison(enemy) {
-    const targets = this.game.queryEnemiesInRange(enemy.x, enemy.y, 70 * 70, []);
+    const targets = this.game.queryEnemiesInRange(
+      enemy.x,
+      enemy.y,
+      70 * 70,
+      [],
+    );
     for (let i = 0; i < targets.length; i += 1) {
       const target = targets[i];
-      if (target.active && target !== enemy) target.applyPoison(Math.max(3, enemy.poisonDps * 0.65), 3);
+      if (target.active && target !== enemy)
+        target.applyPoison(Math.max(3, enemy.poisonDps * 0.65), 3);
     }
   }
 
@@ -263,12 +306,22 @@ export class CastleSystem {
     const radius = this.getCastleStat("judgementExplosionRadius", 0);
     const damage = this.getCastleStat("judgementExplosionDamage", 0);
     if (radius <= 0 || damage <= 0) return;
-    const targets = this.game.queryEnemiesInRange(enemy.x, enemy.y, radius * radius, []);
+    const targets = this.game.queryEnemiesInRange(
+      enemy.x,
+      enemy.y,
+      radius * radius,
+      [],
+    );
     for (let i = 0; i < targets.length; i += 1) {
       const target = targets[i];
-      if (target.active && target !== enemy) target.applyDamage(damage, "chaos", this.game, null);
+      if (target.active && target !== enemy)
+        target.applyDamage(damage, "chaos", this.game, null);
     }
-    this.game.spawnEffect("ring", enemy.x, enemy.y, { radius, color: "#ffe28f", duration: 0.4 });
+    this.game.spawnEffect("ring", enemy.x, enemy.y, {
+      radius,
+      color: "#ffe28f",
+      duration: 0.4,
+    });
   }
 
   getUnlockedTalentSet() {
@@ -278,11 +331,20 @@ export class CastleSystem {
   canUnlockTalent(talentId) {
     if (!this.state) return false;
     const talentConfig = TALENTS_BY_ID[talentId];
-    if (!talentConfig || this.state.unlockedTalentIds.includes(talentId)) return false;
+    if (!talentConfig || this.state.unlockedTalentIds.includes(talentId))
+      return false;
     if (this.state.talentPoints < talentConfig.cost) return false;
-    if (talentConfig.prerequisite && !this.state.unlockedTalentIds.includes(talentConfig.prerequisite)) return false;
+    if (
+      talentConfig.prerequisite &&
+      !this.state.unlockedTalentIds.includes(talentConfig.prerequisite)
+    )
+      return false;
     if (talentConfig.final && this.state.finalTalentId) return false;
-    return this.selectedCastle?.branches.some((branchConfig) => branchConfig.id === talentConfig.branch) || false;
+    return (
+      this.selectedCastle?.branches.some(
+        (branchConfig) => branchConfig.id === talentConfig.branch,
+      ) || false
+    );
   }
 
   unlockTalent(talentId) {
@@ -306,11 +368,15 @@ export class CastleSystem {
         modifiers[effect.stat] += effect.value;
       }
       if (effect.type === "towerSpecial") {
-        modifiers.specialAdditions[effect.stat] = (modifiers.specialAdditions[effect.stat] || 0) + effect.value;
+        modifiers.specialAdditions[effect.stat] =
+          (modifiers.specialAdditions[effect.stat] || 0) + effect.value;
       }
     });
 
-    if (this.getCastleStat("spiritDamageBonus", 0) > 0 && (tower.attackType === "chain" || tower.attackType === "instant")) {
+    if (
+      this.getCastleStat("spiritDamageBonus", 0) > 0 &&
+      (tower.attackType === "chain" || tower.attackType === "instant")
+    ) {
       modifiers.damageMultiplier += this.getCastleStat("spiritDamageBonus", 0);
     }
 
@@ -328,7 +394,8 @@ export class CastleSystem {
   getCastleStat(stat, fallback = 0) {
     let value = fallback;
     this.applyTalentEffects((effect) => {
-      if (effect.type === "castle" && effect.stat === stat) value += effect.value;
+      if (effect.type === "castle" && effect.stat === stat)
+        value += effect.value;
     });
     return value;
   }
@@ -336,7 +403,11 @@ export class CastleSystem {
   getAbilityStat(abilityId, stat, fallback = 0) {
     let value = fallback;
     this.applyTalentEffects((effect) => {
-      if (effect.type === "ability" && effect.abilityId === abilityId && effect.stat === stat) {
+      if (
+        effect.type === "ability" &&
+        effect.abilityId === abilityId &&
+        effect.stat === stat
+      ) {
         value += effect.value;
       }
     });
@@ -348,14 +419,22 @@ export class CastleSystem {
     for (let i = 0; i < this.state.unlockedTalentIds.length; i += 1) {
       const talentConfig = TALENTS_BY_ID[this.state.unlockedTalentIds[i]];
       if (!talentConfig) continue;
-      for (let j = 0; j < talentConfig.effects.length; j += 1) callback(talentConfig.effects[j]);
+      for (let j = 0; j < talentConfig.effects.length; j += 1)
+        callback(talentConfig.effects[j]);
     }
   }
 
   getAbilityCooldown(abilityConfig) {
-    const castleMultiplier = 1 + this.getCastleStat("cooldownMultiplierBonus", 0);
-    const abilityMultiplier = 1 + this.getAbilityStat(abilityConfig.id, "cooldownMultiplier", 0);
-    return Math.max(1, abilityConfig.cooldown * Math.max(0.2, castleMultiplier) * Math.max(0.2, abilityMultiplier));
+    const castleMultiplier =
+      1 + this.getCastleStat("cooldownMultiplierBonus", 0);
+    const abilityMultiplier =
+      1 + this.getAbilityStat(abilityConfig.id, "cooldownMultiplier", 0);
+    return Math.max(
+      1,
+      abilityConfig.cooldown *
+        Math.max(0.2, castleMultiplier) *
+        Math.max(0.2, abilityMultiplier),
+    );
   }
 
   getAbilityCost(abilityConfig) {
@@ -368,7 +447,9 @@ export class CastleSystem {
   }
 
   canCastAbility(abilityId) {
-    const abilityConfig = this.selectedCastle?.abilities.find((ability) => ability.id === abilityId);
+    const abilityConfig = this.selectedCastle?.abilities.find(
+      (ability) => ability.id === abilityId,
+    );
     if (!abilityConfig || !this.state) return false;
     if ((this.state.activeCooldowns[abilityId] || 0) > 0) return false;
     const cost = this.getAbilityCost(abilityConfig);
@@ -378,26 +459,36 @@ export class CastleSystem {
   }
 
   castAbility(abilityId, targetPoint = null) {
-    const abilityConfig = this.selectedCastle?.abilities.find((ability) => ability.id === abilityId);
+    const abilityConfig = this.selectedCastle?.abilities.find(
+      (ability) => ability.id === abilityId,
+    );
     if (!abilityConfig || !this.state) return { ok: false };
     if (!this.canCastAbility(abilityId)) return { ok: false };
     if (abilityConfig.target === "area" && !targetPoint) {
       this.game.pendingAbilityId = abilityId;
       return { ok: true, targeting: true };
     }
-    if (!this.spendMana(this.getAbilityCost(abilityConfig))) return { ok: false };
-    if (!this.spendResource(this.getAbilitySoulCost(abilityConfig))) return { ok: false };
+    if (!this.spendMana(this.getAbilityCost(abilityConfig)))
+      return { ok: false };
+    if (!this.spendResource(this.getAbilitySoulCost(abilityConfig)))
+      return { ok: false };
 
     let result = false;
-    if (abilityId === "heavenlyStrike") result = this.castHeavenlyStrike(abilityConfig);
+    if (abilityId === "heavenlyStrike")
+      result = this.castHeavenlyStrike(abilityConfig);
     if (abilityId === "rallyHorn") result = this.castRallyHorn(abilityConfig);
-    if (abilityId === "thornRain") result = this.castThornRain(abilityConfig, targetPoint);
-    if (abilityId === "ancientRoots") result = this.castAncientRoots(abilityConfig, targetPoint);
-    if (abilityId === "fingerOfDeath") result = this.castFingerOfDeath(abilityConfig);
-    if (abilityId === "plagueCloud") result = this.castPlagueCloud(abilityConfig, targetPoint);
+    if (abilityId === "thornRain")
+      result = this.castThornRain(abilityConfig, targetPoint);
+    if (abilityId === "ancientRoots")
+      result = this.castAncientRoots(abilityConfig, targetPoint);
+    if (abilityId === "fingerOfDeath")
+      result = this.castFingerOfDeath(abilityConfig);
+    if (abilityId === "plagueCloud")
+      result = this.castPlagueCloud(abilityConfig, targetPoint);
 
     if (!result) return { ok: false };
-    this.state.activeCooldowns[abilityId] = this.getAbilityCooldown(abilityConfig);
+    this.state.activeCooldowns[abilityId] =
+      this.getAbilityCooldown(abilityConfig);
     this.game.pendingAbilityId = null;
     return { ok: true };
   }
@@ -405,19 +496,39 @@ export class CastleSystem {
   castHeavenlyStrike(abilityConfig) {
     const target = findStrongestEnemy(this.game.enemies);
     if (!target) return false;
-    const damage = (300 + this.state.level * 35) * (1 + this.getAbilityStat(abilityConfig.id, "damageMultiplier", 0));
+    const damage =
+      (300 + this.state.level * 35) *
+      (1 + this.getAbilityStat(abilityConfig.id, "damageMultiplier", 0));
     target.applyDamage(damage, abilityConfig.damageType, this.game, null);
-    if (target.active && this.getAbilityStat(abilityConfig.id, "appliesJudgement", 0) > 0) {
-      target.applyJudgement(0.16 + this.getCastleStat("judgementVulnerabilityBonus", 0), 8 + this.getCastleStat("judgementDurationBonus", 0));
+    if (
+      target.active &&
+      this.getAbilityStat(abilityConfig.id, "appliesJudgement", 0) > 0
+    ) {
+      target.applyJudgement(
+        0.16 + this.getCastleStat("judgementVulnerabilityBonus", 0),
+        8 + this.getCastleStat("judgementDurationBonus", 0),
+      );
     }
-    this.game.spawnEffect("beam", target.x, target.y - 90, { x2: target.x, y2: target.y, color: "#fff0a6", duration: 0.18 });
-    this.game.spawnEffect("ring", target.x, target.y, { radius: 58, color: "#ffe28f", duration: 0.38 });
+    this.game.spawnEffect("beam", target.x, target.y - 90, {
+      x2: target.x,
+      y2: target.y,
+      color: "#fff0a6",
+      duration: 0.18,
+    });
+    this.game.spawnEffect("ring", target.x, target.y, {
+      radius: 58,
+      color: "#ffe28f",
+      duration: 0.38,
+    });
     return true;
   }
 
   castRallyHorn(abilityConfig) {
-    const duration = (abilityConfig.duration || 8) + this.getAbilityStat(abilityConfig.id, "durationBonus", 0);
-    const fireRateBonus = 0.3 + this.getAbilityStat(abilityConfig.id, "fireRateBonus", 0);
+    const duration =
+      (abilityConfig.duration || 8) +
+      this.getAbilityStat(abilityConfig.id, "durationBonus", 0);
+    const fireRateBonus =
+      0.3 + this.getAbilityStat(abilityConfig.id, "fireRateBonus", 0);
     this.state.temporaryEffects.push({
       type: "tower",
       stat: "fireRateMultiplier",
@@ -425,42 +536,75 @@ export class CastleSystem {
       remaining: duration,
       label: abilityConfig.name,
     });
-    this.game.spawnEffect("ring", this.game.map.width * this.game.map.tileSize * 0.5, this.game.map.height * this.game.map.tileSize * 0.5, {
-      radius: 180,
-      color: "#ffd564",
-      duration: 0.6,
-    });
+    this.game.spawnEffect(
+      "ring",
+      this.game.map.width * this.game.map.tileSize * 0.5,
+      this.game.map.height * this.game.map.tileSize * 0.5,
+      {
+        radius: 180,
+        color: "#ffd564",
+        duration: 0.6,
+      },
+    );
     return true;
   }
 
   castThornRain(abilityConfig, targetPoint) {
     if (!targetPoint) return false;
-    const radius = (abilityConfig.areaRadius || 90) + this.getAbilityStat(abilityConfig.id, "radiusBonus", 0);
+    const radius =
+      (abilityConfig.areaRadius || 90) +
+      this.getAbilityStat(abilityConfig.id, "radiusBonus", 0);
     const damage = 80 + this.state.level * 15;
-    const poisonDps = 10 + this.getAbilityStat(abilityConfig.id, "poisonDpsBonus", 0);
-    const targets = this.game.queryEnemiesInRange(targetPoint.x, targetPoint.y, radius * radius, []);
+    const poisonDps =
+      10 + this.getAbilityStat(abilityConfig.id, "poisonDpsBonus", 0);
+    const targets = this.game.queryEnemiesInRange(
+      targetPoint.x,
+      targetPoint.y,
+      radius * radius,
+      [],
+    );
     for (let i = 0; i < targets.length; i += 1) {
       const enemy = targets[i];
       enemy.applyDamage(damage, abilityConfig.damageType, this.game, null);
       if (enemy.active) enemy.applyPoison(poisonDps, 5);
     }
-    this.game.spawnEffect("ring", targetPoint.x, targetPoint.y, { radius, color: "#84df79", duration: 0.45 });
+    this.game.spawnEffect("ring", targetPoint.x, targetPoint.y, {
+      radius,
+      color: "#84df79",
+      duration: 0.45,
+    });
     return true;
   }
 
   castAncientRoots(abilityConfig, targetPoint) {
     if (!targetPoint) return false;
-    const radius = (abilityConfig.areaRadius || 100) + this.getAbilityStat(abilityConfig.id, "radiusBonus", 0);
-    const rootDuration = 2 + this.getAbilityStat(abilityConfig.id, "rootDurationBonus", 0);
-    const poisonDps = this.getAbilityStat(abilityConfig.id, "poisonDpsBonus", 0);
-    const targets = this.game.queryEnemiesInRange(targetPoint.x, targetPoint.y, radius * radius, []);
+    const radius =
+      (abilityConfig.areaRadius || 100) +
+      this.getAbilityStat(abilityConfig.id, "radiusBonus", 0);
+    const rootDuration =
+      2 + this.getAbilityStat(abilityConfig.id, "rootDurationBonus", 0);
+    const poisonDps = this.getAbilityStat(
+      abilityConfig.id,
+      "poisonDpsBonus",
+      0,
+    );
+    const targets = this.game.queryEnemiesInRange(
+      targetPoint.x,
+      targetPoint.y,
+      radius * radius,
+      [],
+    );
     for (let i = 0; i < targets.length; i += 1) {
       const enemy = targets[i];
       enemy.applyRoot(rootDuration);
       enemy.applySlow(0.35, rootDuration + 4);
       if (poisonDps > 0) enemy.applyPoison(poisonDps, 5);
     }
-    this.game.spawnEffect("ring", targetPoint.x, targetPoint.y, { radius, color: "#7bd06e", duration: 0.55 });
+    this.game.spawnEffect("ring", targetPoint.x, targetPoint.y, {
+      radius,
+      color: "#7bd06e",
+      duration: 0.55,
+    });
     return true;
   }
 
@@ -469,19 +613,44 @@ export class CastleSystem {
     if (!target) return false;
     const damage = 250 + this.state.level * 45;
     target.applyDamage(damage, abilityConfig.damageType, this.game, null);
-    const executeThreshold = this.getAbilityStat(abilityConfig.id, "executeThreshold", 0);
-    if (target.active && executeThreshold > 0 && target.hp / target.maxHp <= executeThreshold) {
-      target.applyDamage(target.maxHp, abilityConfig.damageType, this.game, null);
+    const executeThreshold = this.getAbilityStat(
+      abilityConfig.id,
+      "executeThreshold",
+      0,
+    );
+    if (
+      target.active &&
+      executeThreshold > 0 &&
+      target.hp / target.maxHp <= executeThreshold
+    ) {
+      target.applyDamage(
+        target.maxHp,
+        abilityConfig.damageType,
+        this.game,
+        null,
+      );
     }
-    if (!target.active) this.addResource(2 + this.getAbilityStat(abilityConfig.id, "refundBonus", 0));
-    this.game.spawnEffect("beam", target.x, target.y - 75, { x2: target.x, y2: target.y, color: "#b9a0ff", duration: 0.2 });
+    if (!target.active)
+      this.addResource(
+        2 + this.getAbilityStat(abilityConfig.id, "refundBonus", 0),
+      );
+    this.game.spawnEffect("beam", target.x, target.y - 75, {
+      x2: target.x,
+      y2: target.y,
+      color: "#b9a0ff",
+      duration: 0.2,
+    });
     return true;
   }
 
   castPlagueCloud(abilityConfig, targetPoint) {
     if (!targetPoint) return false;
-    const radius = (abilityConfig.areaRadius || 100) + this.getAbilityStat(abilityConfig.id, "radiusBonus", 0);
-    const duration = (abilityConfig.duration || 8) + this.getAbilityStat(abilityConfig.id, "durationBonus", 0);
+    const radius =
+      (abilityConfig.areaRadius || 100) +
+      this.getAbilityStat(abilityConfig.id, "radiusBonus", 0);
+    const duration =
+      (abilityConfig.duration || 8) +
+      this.getAbilityStat(abilityConfig.id, "durationBonus", 0);
     this.state.activeZones.push({
       type: "plague",
       x: targetPoint.x,
@@ -492,7 +661,11 @@ export class CastleSystem {
       slowPercent: 0.25 + this.getAbilityStat(abilityConfig.id, "slowBonus", 0),
       damageType: "chaos",
     });
-    this.game.spawnEffect("ring", targetPoint.x, targetPoint.y, { radius, color: "#9e83c9", duration: 0.6 });
+    this.game.spawnEffect("ring", targetPoint.x, targetPoint.y, {
+      radius,
+      color: "#9e83c9",
+      duration: 0.6,
+    });
     return true;
   }
 }
