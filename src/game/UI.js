@@ -1,5 +1,11 @@
 import { formatDamageRange, getArmorTypeLabel, getAttackTypeLabel } from "../config/combat.js";
-import { getTowerDisplayName as getTowerConfigDisplayName, getTowerSpriteConfig, TOWER_TYPES, TOWERS_BY_ID } from "../config/towers.js";
+import {
+  getTowerDisplayDescription as getTowerConfigDisplayDescription,
+  getTowerDisplayName as getTowerConfigDisplayName,
+  getTowerSpriteConfig,
+  TOWER_TYPES,
+  TOWERS_BY_ID,
+} from "../config/towers.js";
 import { clamp, formatCompact, rectContains } from "../utils/math.js";
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -260,6 +266,12 @@ function getTowerUnlockText(game, tower) {
   return level > 1 ? `Castle Lv.${level}` : "";
 }
 
+function getTowerSelectBlockReason(game, tower) {
+  if (!game.unlockedTowers.includes(tower.id)) return getTowerUnlockText(game, tower);
+  if (game.gold < tower.cost) return "Low gold";
+  return "";
+}
+
 function formatCooldown(seconds) {
   return seconds > 0 ? `${Math.ceil(seconds)}s` : "Ready";
 }
@@ -351,6 +363,7 @@ export class UI {
     this.touchTalentHold = null;
     this.touchAbilityHold = null;
     this.talentTooltip = null;
+    this.towerInfoId = null;
     this.pendingTalentConfirmId = null;
   }
 
@@ -419,6 +432,14 @@ export class UI {
     this.pendingTalentConfirmId = null;
   }
 
+  openTowerInfo(typeId) {
+    this.towerInfoId = typeId;
+  }
+
+  closeTowerInfo() {
+    this.towerInfoId = null;
+  }
+
   addButton(action, rect, label, options = {}) {
     const button = {
       action,
@@ -473,6 +494,7 @@ export class UI {
     if (game.state === "victory") this.drawEndScreen(ctx, game, "Victory");
     if (game.state === "leaderboard") this.drawLeaderboard(ctx, game);
     if (game.talentPanelOpen) this.drawTalentPanel(ctx, game);
+    if (this.towerInfoId && game.isRunState()) this.drawTowerInfoPopover(ctx, game);
     if (game.tutorialOpen) this.drawTutorialOverlay(ctx, game);
   }
 
@@ -697,31 +719,8 @@ export class UI {
 
   drawLandscapeTowerList(ctx, game, x, y, w, bottomY) {
     drawFittedText(ctx, "Towers", x, y - 12, w, 13, "#cdbb91", "left", "600");
-    const gap = 6;
     const availableH = Math.max(1, bottomY - y);
-    const rowH = clamp((availableH - gap * (TOWER_TYPES.length - 1)) / TOWER_TYPES.length, 34, 50);
-
-    for (let i = 0; i < TOWER_TYPES.length; i += 1) {
-      const tower = TOWER_TYPES[i];
-      const rect = { x, y: y + i * (rowH + gap), w, h: rowH };
-      const unlocked = game.unlockedTowers.includes(tower.id);
-      const canAfford = game.gold >= tower.cost;
-      const enabled = unlocked && canAfford;
-      const name = this.getTowerDisplayName(game, tower).replace(" Tower", "").replace(" Post", "");
-      this.addButton("selectTowerType", rect, `${name} ${tower.cost}`, {
-        meta: { typeId: tower.id },
-        enabled,
-        kind: game.selectedTowerType === tower.id ? "gold" : "default",
-      });
-      const button = this.buttons[this.buttons.length - 1];
-      this.drawButton(ctx, button);
-      this.drawTowerIcon(ctx, game, tower, rect.x + 19, rect.y + rect.h * 0.5, 11, 12);
-      if (!unlocked) {
-        this.drawTowerLockBadge(ctx, rect.x + rect.w - 78, rect.y + 4, 68, 17, getTowerUnlockText(game, tower));
-      } else if (!canAfford) {
-        drawFittedText(ctx, "low", rect.x + rect.w - 9, rect.y + rect.h * 0.5, 34, 10, "#b9ab8e", "right", "600");
-      }
-    }
+    this.drawTowerGrid(ctx, game, x, y, w, availableH, { compact: true, panel: false });
   }
 
   drawTowerLockBadge(ctx, x, y, w, h, label) {
@@ -734,6 +733,108 @@ export class UI {
     ctx.lineWidth = 1;
     ctx.stroke();
     drawFittedText(ctx, label, x + w * 0.5, y + h * 0.5, w - 8, 10, "#ffd564", "center", "800");
+    ctx.restore();
+  }
+
+  drawTowerGrid(ctx, game, x, y, w, h, options = {}) {
+    const compact = options.compact !== false;
+    const columns = 3;
+    const rows = Math.ceil(TOWER_TYPES.length / columns);
+    const gap = compact ? 6 : 8;
+    const pad = options.panel ? (compact ? 8 : 10) : 0;
+    const innerX = x + pad;
+    const innerY = y + pad;
+    const innerW = Math.max(1, w - pad * 2);
+    const innerH = Math.max(1, h - pad * 2);
+    const tileW = Math.floor((innerW - gap * (columns - 1)) / columns);
+    const tileH = clamp(Math.floor((innerH - gap * (rows - 1)) / rows), compact ? 58 : 70, compact ? 76 : 88);
+
+    for (let i = 0; i < TOWER_TYPES.length; i += 1) {
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      const rect = {
+        x: innerX + col * (tileW + gap),
+        y: innerY + row * (tileH + gap),
+        w: tileW,
+        h: tileH,
+      };
+      this.drawTowerTile(ctx, game, TOWER_TYPES[i], rect, { compact });
+    }
+  }
+
+  drawTowerTile(ctx, game, tower, rect, options = {}) {
+    const compact = options.compact !== false;
+    const unlocked = game.unlockedTowers.includes(tower.id);
+    const canAfford = game.gold >= tower.cost;
+    const enabled = unlocked && canAfford;
+    const selected = game.selectedTowerType === tower.id;
+    const blockReason = getTowerSelectBlockReason(game, tower);
+    const name = this.getTowerDisplayName(game, tower)
+      .replace(" Tower", "")
+      .replace(" Post", "")
+      .replace(" Relay", "");
+    this.addButton("selectTowerType", rect, "", {
+      meta: { typeId: tower.id },
+      enabled,
+      kind: selected ? "gold" : "default",
+    });
+
+    ctx.save();
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
+    const fill = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.h);
+    fill.addColorStop(0, enabled ? (selected ? "#8b5f1f" : "#34281d") : "rgba(38, 35, 30, 0.56)");
+    fill.addColorStop(0.55, enabled ? (selected ? "#624016" : "#211a13") : "rgba(29, 27, 23, 0.5)");
+    fill.addColorStop(1, enabled ? "#140f0b" : "rgba(16, 15, 13, 0.46)");
+    ctx.fillStyle = fill;
+    ctx.fill();
+    drawButtonWoodTexture(ctx, { x: rect.x + 4, y: rect.y + 4, w: rect.w - 8, h: rect.h - 8 }, rect.x + rect.y, enabled ? 0.12 : 0.05);
+    ctx.strokeStyle = selected ? "#ffd564" : enabled ? "rgba(255, 226, 154, 0.42)" : "rgba(255, 255, 255, 0.16)";
+    ctx.lineWidth = selected ? 2 : 1.5;
+    ctx.stroke();
+
+    ctx.globalAlpha = enabled ? 1 : 0.48;
+    this.drawTowerIcon(ctx, game, tower, rect.x + rect.w * 0.5, rect.y + (compact ? 21 : 26), compact ? 12 : 15, compact ? 11 : 13);
+    ctx.globalAlpha = 1;
+
+    const infoSize = compact ? 17 : 20;
+    const infoRect = { x: rect.x + rect.w - infoSize - 5, y: rect.y + 5, w: infoSize, h: infoSize };
+    this.addButton("towerInfo", infoRect, "?", { meta: { typeId: tower.id }, kind: "gold" });
+    roundRect(ctx, infoRect.x, infoRect.y, infoRect.w, infoRect.h, 5);
+    ctx.fillStyle = "rgba(21, 17, 12, 0.9)";
+    ctx.fill();
+    ctx.strokeStyle = this.towerInfoId === tower.id ? "#ffd564" : "rgba(255, 226, 154, 0.52)";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    drawFittedText(ctx, "?", infoRect.x + infoRect.w * 0.5, infoRect.y + infoRect.h * 0.5, infoRect.w - 4, compact ? 12 : 14, "#fff0b8", "center", "900");
+
+    if (blockReason) {
+      const badgeH = compact ? 14 : 16;
+      const badgeY = rect.y + rect.h - badgeH - 5;
+      this.drawTowerTileName(ctx, name, rect.x + 5, rect.y + (compact ? 34 : 40), rect.w - 10, Math.max(10, badgeY - rect.y - (compact ? 35 : 41)), compact, enabled);
+      this.drawTowerLockBadge(ctx, rect.x + 5, badgeY, rect.w - 10, badgeH, blockReason);
+    } else {
+      const costY = rect.y + rect.h - (compact ? 10 : 12);
+      this.drawTowerTileName(ctx, name, rect.x + 5, rect.y + (compact ? 36 : 43), rect.w - 10, Math.max(12, costY - rect.y - (compact ? 45 : 52)), compact, enabled);
+      drawFittedText(ctx, `${tower.cost}`, rect.x + rect.w * 0.5, costY, rect.w - 10, compact ? 10 : 11, enabled ? "#ffd564" : "rgba(149, 137, 117, 0.58)", "center", "700");
+    }
+    ctx.restore();
+  }
+
+  drawTowerTileName(ctx, name, x, y, w, h, compact, enabled) {
+    const fontSize = compact ? 9 : 11;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y - 2, w, h + 4);
+    ctx.clip();
+    ctx.font = `800 ${fontSize}px Trebuchet MS, Arial, sans-serif`;
+    const lines = wrapTextLines(ctx, name, w, h >= fontSize * 2.1 ? 2 : 1);
+    const lineH = compact ? 10 : 12;
+    const totalH = lines.length * lineH;
+    let lineY = y + Math.max(lineH * 0.5, (h - totalH) * 0.5 + lineH * 0.5);
+    for (let i = 0; i < lines.length; i += 1) {
+      drawFittedText(ctx, lines[i], x + w * 0.5, lineY, w, fontSize, enabled ? "#f7edd5" : "#a99f8e", "center", "800");
+      lineY += lineH;
+    }
     ctx.restore();
   }
 
@@ -755,6 +856,16 @@ export class UI {
       game.castleSystem?.lastSelectedCastleId ||
       "human";
     return getTowerConfigDisplayName(config, castleId);
+  }
+
+  getTowerDisplayDescription(game, tower) {
+    const config = tower?.config || tower;
+    const castleId =
+      tower?.castleId ||
+      game.castleSystem?.state?.selectedCastleId ||
+      game.castleSystem?.lastSelectedCastleId ||
+      "human";
+    return getTowerConfigDisplayDescription(config, castleId);
   }
 
   getTowerIconImage(game, tower) {
@@ -802,6 +913,62 @@ export class UI {
     ctx.lineWidth = 2;
     ctx.stroke();
     drawFittedText(ctx, config.icon || "T", x, y + 0.5, radius * 1.4, size, "#1b1711", "center", "800");
+  }
+
+  drawTowerInfoPopover(ctx, game) {
+    const tower = TOWERS_BY_ID[this.towerInfoId];
+    if (!tower) {
+      this.closeTowerInfo();
+      return;
+    }
+
+    this.addBlockingRect({ x: 0, y: 0, w: this.lastWidth, h: this.lastHeight });
+    this.addButton("closeTowerInfo", { x: 0, y: 0, w: this.lastWidth, h: this.lastHeight }, "");
+
+    const portrait = this.lastHeight > this.lastWidth;
+    const width = Math.min(portrait ? 340 : 320, this.lastWidth - 24);
+    const textW = width - 28;
+    ctx.save();
+    ctx.font = "600 12px Trebuchet MS, Arial, sans-serif";
+    const description = this.getTowerDisplayDescription(game, tower);
+    const descriptionLines = wrapTextLines(ctx, description, textW, 3);
+    const statLines = getTowerStatLines(tower).slice(0, portrait ? 4 : 5);
+    const blockReason = getTowerSelectBlockReason(game, tower);
+    const height = 94 + descriptionLines.length * 16 + statLines.length * 16 + (blockReason ? 20 : 0);
+    const x = (this.lastWidth - width) * 0.5;
+    const y = clamp(this.lastHeight * (portrait ? 0.28 : 0.2), 12, this.lastHeight - height - 12);
+    const rect = { x, y, w: width, h: height };
+    this.addButton("noop", rect, "");
+
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fillStyle = "rgba(19, 14, 10, 0.98)";
+    ctx.fill();
+    drawPanelTexture(ctx, rect, hashString(tower.id), 0.12);
+    ctx.strokeStyle = "rgba(255, 226, 154, 0.5)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    this.drawTowerIcon(ctx, game, tower, x + 28, y + 30, 17, 14);
+    drawFittedText(ctx, this.getTowerDisplayName(game, tower), x + 54, y + 22, width - 100, 17, "#f7edd5", "left", "900");
+    drawFittedText(ctx, `${tower.cost} gold`, x + 54, y + 43, width - 100, 12, "#ffd564", "left", "700");
+
+    const closeRect = { x: x + width - 38, y: y + 14, w: 26, h: 26 };
+    this.addButton("closeTowerInfo", closeRect, "x", { kind: "danger" });
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+
+    let lineY = y + 70;
+    for (let i = 0; i < descriptionLines.length; i += 1) {
+      drawFittedText(ctx, descriptionLines[i], x + 14, lineY, textW, 12, "#e7dbc0", "left", "600");
+      lineY += 16;
+    }
+    for (let i = 0; i < statLines.length; i += 1) {
+      drawFittedText(ctx, statLines[i], x + 14, lineY + 2, textW, 11, i === 0 ? "#fff0b8" : "#cdbb91", "left", "700");
+      lineY += 16;
+    }
+    if (blockReason) {
+      drawFittedText(ctx, blockReason, x + 14, lineY + 4, textW, 12, "#ffd564", "left", "900");
+    }
+    ctx.restore();
   }
 
   drawDesktopSelectedPanel(ctx, game, x, y, w, h) {
@@ -867,8 +1034,8 @@ export class UI {
     const selectedY = selectorY + selectorH + gap;
     const selectedH = Math.max(38, panel.y + panel.h - pad - selectedY);
 
-    this.drawTowerDropdown(ctx, game, panel.x + pad, selectorY, panel.w - pad * 2, selectorH, tight);
     this.drawCompactSelectedPanel(ctx, game, panel.x + pad, selectedY, panel.w - pad * 2, selectedH);
+    this.drawTowerDropdown(ctx, game, panel.x + pad, selectorY, panel.w - pad * 2, selectorH, tight);
   }
 
   drawPortraitStatsBar(ctx, game, rect) {
@@ -998,38 +1165,22 @@ export class UI {
 
     if (!game.towerDropdownOpen) return;
 
-    const rowH = tight ? 32 : 36;
-    const gap = 4;
-    const listH = TOWER_TYPES.length * rowH + (TOWER_TYPES.length - 1) * gap;
-    const listY = Math.max(8, y - listH - 6);
-    roundRect(ctx, x, listY - 6, w, listH + 12, 7);
+    const rows = Math.ceil(TOWER_TYPES.length / 3);
+    const gap = tight ? 6 : 8;
+    const statsBottom = game.camera.statsRect.y + game.camera.statsRect.h;
+    const maxGridH = Math.max(180, y - statsBottom - 12);
+    const tileH = clamp(Math.floor((maxGridH - 16 - gap * (rows - 1)) / rows), tight ? 62 : 68, tight ? 76 : 84);
+    const gridH = tileH * rows + gap * (rows - 1) + 16;
+    const listY = Math.max(statsBottom + 6, y - gridH - 6);
+    const listRect = { x, y: listY, w, h: gridH };
+    this.addBlockingRect(listRect);
+    roundRect(ctx, listRect.x, listRect.y, listRect.w, listRect.h, 7);
     ctx.fillStyle = "rgba(38, 29, 20, 0.98)";
     ctx.fill();
-    drawPanelTexture(ctx, { x, y: listY - 6, w, h: listH + 12 }, listH, 0.16);
+    drawPanelTexture(ctx, listRect, gridH, 0.16);
     ctx.strokeStyle = "rgba(255, 238, 190, 0.38)";
     ctx.stroke();
-
-    for (let i = 0; i < TOWER_TYPES.length; i += 1) {
-      const tower = TOWER_TYPES[i];
-      const rowY = listY + i * (rowH + gap);
-      const canAfford = game.gold >= tower.cost;
-      const unlocked = game.unlockedTowers.includes(tower.id);
-      const isSelected = game.selectedTowerType === tower.id;
-      const towerName = this.getTowerDisplayName(game, tower);
-      this.addButton("selectTowerType", { x: x + 6, y: rowY, w: w - 12, h: rowH }, `${towerName}  ${tower.cost}`, {
-        meta: { typeId: tower.id },
-        enabled: unlocked && canAfford,
-        kind: isSelected ? "gold" : "default",
-      });
-      const button = this.buttons[this.buttons.length - 1];
-      this.drawButton(ctx, button);
-      this.drawTowerIcon(ctx, game, tower, button.rect.x + 17, button.rect.y + rowH * 0.5, tight ? 7 : 8, tight ? 9 : 10);
-      if (!unlocked) {
-        this.drawTowerLockBadge(ctx, button.rect.x + button.rect.w - 82, button.rect.y + 4, 72, 17, getTowerUnlockText(game, tower));
-      } else if (!canAfford) {
-        drawFittedText(ctx, "low gold", button.rect.x + button.rect.w - 10, button.rect.y + rowH * 0.5, 64, 10, "#b9ab8e", "right", "600");
-      }
-    }
+    this.drawTowerGrid(ctx, game, listRect.x, listRect.y, listRect.w, listRect.h, { compact: tight, panel: true });
   }
 
   drawCompactSelectedPanel(ctx, game, x, y, w, h) {
@@ -1792,20 +1943,24 @@ export class UI {
     drawFittedText(ctx, "Choose Your Castle", this.lastWidth * 0.5, y, w, 38, "#f7edd5", "center");
     drawFittedText(ctx, "Castle talents reset each run", this.lastWidth * 0.5, y + 38, w, 15, "#cdbb91", "center", "600");
 
-    const gap = 14;
     const columns = this.lastWidth < 720 ? 1 : 3;
+    const compact = columns === 1;
+    const gap = compact ? 10 : 14;
     const cardW = columns === 1 ? Math.min(420, w) : (w - gap * 2) / 3;
-    const cardH = columns === 1 ? 146 : 246;
+    const cardTop = y + (compact ? 66 : 74);
+    const availableCardH = Math.max(1, this.lastHeight - cardTop - 16);
+    const cardH = compact ? clamp(Math.floor((availableCardH - gap * (castles.length - 1)) / castles.length), 132, 166) : 246;
     const startX = columns === 1 ? (this.lastWidth - cardW) * 0.5 : x;
     for (let i = 0; i < castles.length; i += 1) {
       const castle = castles[i];
       const col = columns === 1 ? 0 : i;
       const row = columns === 1 ? i : 0;
-      const rect = { x: startX + col * (cardW + gap), y: y + 74 + row * (cardH + gap), w: cardW, h: cardH };
+      const rect = { x: startX + col * (cardW + gap), y: cardTop + row * (cardH + gap), w: cardW, h: cardH };
       const last = game.castleSystem.lastSelectedCastleId === castle.id;
-      this.drawCastleCard(ctx, castle, rect, last);
-      const buttonH = 36;
-      this.addButton("selectCastle", { x: rect.x + 14, y: rect.y + rect.h - buttonH - 12, w: rect.w - 28, h: buttonH }, last ? "Select Again" : "Select", {
+      this.drawCastleCard(ctx, castle, rect, last, compact);
+      const buttonH = compact ? 32 : 36;
+      const buttonInset = compact ? 10 : 12;
+      this.addButton("selectCastle", { x: rect.x + 14, y: rect.y + rect.h - buttonH - buttonInset, w: rect.w - 28, h: buttonH }, last ? "Select Again" : "Select", {
         meta: { castleId: castle.id },
         kind: last ? "gold" : "primary",
       });
@@ -1813,7 +1968,7 @@ export class UI {
     }
   }
 
-  drawCastleCard(ctx, castle, rect, highlighted) {
+  drawCastleCard(ctx, castle, rect, highlighted, compact = false) {
     roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 8);
     ctx.fillStyle = highlighted ? "rgba(60, 45, 25, 0.96)" : "rgba(31, 24, 18, 0.96)";
     ctx.fill();
@@ -1824,11 +1979,27 @@ export class UI {
 
     ctx.fillStyle = castle.color;
     ctx.beginPath();
-    ctx.arc(rect.x + 34, rect.y + 34, 20, 0, Math.PI * 2);
+    ctx.arc(rect.x + 34, rect.y + 34, compact ? 18 : 20, 0, Math.PI * 2);
     ctx.fill();
-    drawFittedText(ctx, castle.icon, rect.x + 34, rect.y + 34, 20, 19, "#17110d", "center", "800");
-    drawFittedText(ctx, castle.name, rect.x + 66, rect.y + 24, rect.w - 82, 18, "#f7edd5", "left");
-    drawFittedText(ctx, castle.title, rect.x + 66, rect.y + 48, rect.w - 82, 12, "#cdbb91", "left", "600");
+    drawFittedText(ctx, castle.icon, rect.x + 34, rect.y + 34, 20, compact ? 17 : 19, "#17110d", "center", "800");
+    drawFittedText(ctx, castle.name, rect.x + 66, rect.y + 24, rect.w - 82, compact ? 17 : 18, "#f7edd5", "left");
+    drawFittedText(ctx, castle.title, rect.x + 66, rect.y + 48, rect.w - 82, compact ? 11 : 12, "#cdbb91", "left", "600");
+
+    if (compact) {
+      const buttonTop = rect.y + rect.h - 42;
+      ctx.font = "600 12px Trebuchet MS, Arial, sans-serif";
+      const descriptionLines = wrapTextLines(ctx, castle.description, rect.w - 32, 2);
+      let lineY = rect.y + 76;
+      for (let i = 0; i < descriptionLines.length && lineY < buttonTop - 8; i += 1) {
+        drawFittedText(ctx, descriptionLines[i], rect.x + 16, lineY, rect.w - 32, 12, "#e7dbc0", "left", "700");
+        lineY += 15;
+      }
+      if (lineY < buttonTop - 7) {
+        drawFittedText(ctx, castle.strength, rect.x + 16, lineY, rect.w - 32, 11, "#b8e6a8", "left", "600");
+      }
+      return;
+    }
+
     drawFittedText(ctx, castle.description, rect.x + 16, rect.y + 84, rect.w - 32, 13, "#e7dbc0", "left", "600");
     drawFittedText(ctx, `Strong: ${castle.strength}`, rect.x + 16, rect.y + 122, rect.w - 32, 12, "#b8e6a8", "left", "600");
     drawFittedText(ctx, `Weak: ${castle.weakness}`, rect.x + 16, rect.y + 148, rect.w - 32, 12, "#e8b0a0", "left", "600");

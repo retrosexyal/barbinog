@@ -191,6 +191,7 @@ export class Input {
       event.preventDefault();
       if (this.game.towerPlacementDrag) this.game.cancelTowerDrag();
       else if (this.game.ui.pendingTalentConfirmId) this.game.ui.closeTalentConfirm();
+      else if (this.game.ui.towerInfoId) this.game.ui.closeTowerInfo();
       else if (this.game.talentPanelOpen) this.game.talentPanelOpen = false;
       else if (this.game.pendingAbilityId) this.game.pendingAbilityId = null;
       else if (this.game.state === "leaderboard") this.game.closeLeaderboard();
