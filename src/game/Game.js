@@ -25,6 +25,7 @@ import { WaveManager } from "./WaveManager.js";
 const START_GOLD = 500;
 const START_LIVES = 20;
 const SPATIAL_CELL = 128;
+const FIRST_WAVE_AUTO_START_DELAY = 10;
 const TOWER_UNLOCKS = Object.freeze([
   { level: 1, count: 3 },
   { level: 9, count: 6 },
@@ -37,6 +38,16 @@ function getUnlockedTowerIds(castleLevel = 1) {
     if (castleLevel >= TOWER_UNLOCKS[i].level) unlockedCount = TOWER_UNLOCKS[i].count;
   }
   return TOWER_TYPES.slice(0, Math.min(unlockedCount, TOWER_TYPES.length)).map((tower) => tower.id);
+}
+
+function getTowerUnlockLevel(typeId) {
+  const towerIndex = TOWER_TYPES.findIndex((tower) => tower.id === typeId);
+  if (towerIndex < 0) return 1;
+  for (let i = 0; i < TOWER_UNLOCKS.length; i += 1) {
+    const unlock = TOWER_UNLOCKS[i];
+    if (towerIndex < unlock.count) return unlock.level;
+  }
+  return TOWER_UNLOCKS[TOWER_UNLOCKS.length - 1]?.level || 1;
 }
 
 export class Game {
@@ -90,7 +101,10 @@ export class Game {
     this.hoverTile = null;
     this.castleSelectCompletedWave = 0;
     this.talentPanelOpen = false;
+    this.tutorialOpen = false;
+    this.tutorialSeen = false;
     this.pendingAbilityId = null;
+    this.firstWaveCountdown = null;
     this.nextWaveAutoStartDelay = NEXT_WAVE_AUTO_START_DELAY;
     this.nextWaveCountdown = null;
     this.usedContinue = false;
@@ -115,6 +129,7 @@ export class Game {
     this.leaderboard = new Leaderboard(this.yandex);
     this.bestScore = this.savedData.bestScore || 0;
     this.baseTotalKills = this.savedData.totalKills || 0;
+    this.tutorialSeen = !!this.savedData.tutorialSeen;
     this.refreshUnlockedTowers();
     this.castleSystem.lastSelectedCastleId = this.savedData.lastSelectedCastleId || this.castleSystem.lastSelectedCastleId;
     this.input = new Input(this.canvas, this);
@@ -162,6 +177,7 @@ export class Game {
       return;
     }
 
+    this.updateFirstWaveCountdown(dt);
     this.waveManager.update(dt);
     this.updateEnemies(dt);
     if (this.selectedEnemy && !this.selectedEnemy.active) this.selectedEnemy = null;
@@ -201,7 +217,9 @@ export class Game {
     this.hoverTile = null;
     this.nextWaveCountdown = null;
     this.talentPanelOpen = false;
+    this.tutorialOpen = false;
     this.pendingAbilityId = null;
+    this.firstWaveCountdown = null;
     this.enemies.length = 0;
     this.projectiles.length = 0;
     this.effects.length = 0;
@@ -232,7 +250,18 @@ export class Game {
     this.refreshUnlockedTowers();
     this.state = "playing";
     this.yandex.gameplayStart();
+    this.prepareFirstWaveAutoStart();
     this.saveProgress();
+  }
+
+  prepareFirstWaveAutoStart() {
+    if (this.completedWave !== 0 || this.waveManager.running || !this.waveManager.hasMoreWaves()) return;
+    if (!this.tutorialSeen) {
+      this.tutorialOpen = true;
+      this.firstWaveCountdown = null;
+      return;
+    }
+    this.firstWaveCountdown = FIRST_WAVE_AUTO_START_DELAY;
   }
 
   startWave() {
@@ -243,10 +272,26 @@ export class Game {
       return;
     }
     if (this.waveManager.startNextWave()) {
+      this.firstWaveCountdown = null;
       this.nextWaveCountdown = null;
       this.state = "playing";
       this.yandex.gameplayStart();
     }
+  }
+
+  updateFirstWaveCountdown(dt) {
+    if (
+      this.firstWaveCountdown == null ||
+      this.tutorialOpen ||
+      this.state !== "playing" ||
+      this.completedWave !== 0 ||
+      this.waveManager.running ||
+      !this.waveManager.hasMoreWaves()
+    ) {
+      return;
+    }
+    this.firstWaveCountdown = Math.max(0, this.firstWaveCountdown - dt);
+    if (this.firstWaveCountdown <= 0) this.startWave();
   }
 
   startNextWaveCountdown() {
@@ -299,6 +344,7 @@ export class Game {
       this.abilityMenuOpen = false;
       this.togglePause();
     }
+    else if (action === "closeTutorial") this.closeTutorial();
     else if (action === "talents") this.talentPanelOpen = true;
     else if (action === "closeTalents") {
       this.ui.closeTalentConfirm();
@@ -414,6 +460,20 @@ export class Game {
     this.towerDropdownOpen = false;
     this.abilityMenuOpen = false;
     return true;
+  }
+
+  closeTutorial() {
+    if (!this.tutorialOpen) return;
+    this.tutorialOpen = false;
+    this.tutorialSeen = true;
+    if (this.completedWave === 0 && !this.waveManager.running && this.waveManager.hasMoreWaves()) {
+      this.firstWaveCountdown = FIRST_WAVE_AUTO_START_DELAY;
+    }
+    this.saveProgress(true);
+  }
+
+  getTowerUnlockLevel(typeId) {
+    return getTowerUnlockLevel(typeId);
   }
 
   refreshUnlockedTowers() {
@@ -805,6 +865,7 @@ export class Game {
       completedWave: this.completedWave,
       unlockedTowers: this.unlockedTowers,
       totalKills: this.baseTotalKills + this.kills,
+      tutorialSeen: this.tutorialSeen,
       lastSelectedCastleId: this.castleSystem.lastSelectedCastleId,
       castleMastery: this.savedData.castleMastery || {},
       unlockedCastles: this.savedData.unlockedCastles || ["human", "elf", "undead"],

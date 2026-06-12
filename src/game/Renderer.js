@@ -154,8 +154,13 @@ export class Renderer {
     this.drawTowers(ctx, game.towers, game);
     this.drawTowerPlacementPreview(ctx, game);
     for (let i = 0; i < game.projectiles.length; i += 1) this.drawProjectile(ctx, game.projectiles[i]);
-    for (let i = 0; i < game.enemies.length; i += 1) this.drawEnemy(ctx, game.enemies[i], game);
+    this.drawEnemies(ctx, game);
     for (let i = 0; i < game.effects.length; i += 1) this.drawEffect(ctx, game.effects[i]);
+  }
+
+  drawEnemies(ctx, game) {
+    for (let i = 0; i < game.enemies.length; i += 1) this.drawEnemy(ctx, game.enemies[i], game);
+    for (let i = 0; i < game.enemies.length; i += 1) this.drawEnemyHpBar(ctx, game.enemies[i], game);
   }
 
   drawTowers(ctx, towers, game) {
@@ -619,7 +624,6 @@ export class Renderer {
     ctx.stroke();
 
     this.drawEnemyStatus(ctx, enemy);
-    this.drawEnemyHpBar(ctx, enemy, -enemy.radius - 10, enemy.radius * 2);
     ctx.restore();
     this.drawCalls += 1;
   }
@@ -661,8 +665,6 @@ export class Renderer {
     }
 
     this.drawEnemyStatus(ctx, enemy);
-
-    this.drawEnemyHpBar(ctx, enemy, -drawHeight * anchorY - 7, Math.max(enemy.radius * 2, drawWidth * 0.54));
     return true;
   }
 
@@ -691,12 +693,47 @@ export class Renderer {
     }
   }
 
-  drawEnemyHpBar(ctx, enemy, y, width) {
+  getEnemyHpBarLayout(enemy, game) {
+    const animations = enemy.animations;
+    const fallback = {
+      y: -enemy.radius - 10,
+      width: enemy.radius * 2,
+    };
+    if (!animations) return fallback;
+
+    const state = game?.state === "paused" && animations.idle ? "idle" : enemy.animationState;
+    const animation = animations[state] || animations.run || animations.idle;
+    const image = animation?.imageSrc ? this.images.get(animation.imageSrc)?.image : null;
+    if (!image || !image.complete || image.naturalWidth <= 0) return fallback;
+
+    const frameCount = animation.frames || 1;
+    const frameWidth = animation.frameWidth || Math.floor(image.naturalWidth / frameCount);
+    const frameHeight = animation.frameHeight || image.naturalHeight;
+    const drawWidth = animation.drawWidth || enemy.radius * 4;
+    const drawHeight = animation.drawHeight || (drawWidth * frameHeight) / frameWidth;
+    const anchorY = animation.anchorY ?? 0.8;
+    return {
+      y: -drawHeight * anchorY - 7,
+      width: Math.max(enemy.radius * 2, drawWidth * 0.54),
+    };
+  }
+
+  drawEnemyHpBar(ctx, enemy, game) {
+    if (!enemy.active) return;
+    const { y, width } = this.getEnemyHpBarLayout(enemy, game);
     const hpRatio = Math.max(0, enemy.hp / enemy.maxHp);
-    ctx.fillStyle = "#221b16";
+    ctx.save();
+    ctx.translate(enemy.x, enemy.y);
+    ctx.fillStyle = "rgba(34, 27, 22, 0.46)";
     ctx.fillRect(-width / 2, y, width, 4);
-    ctx.fillStyle = hpRatio > 0.45 ? "#72d36b" : hpRatio > 0.2 ? "#ffd564" : "#ef6158";
+    ctx.fillStyle =
+      hpRatio > 0.45
+        ? "rgba(114, 211, 107, 0.76)"
+        : hpRatio > 0.2
+          ? "rgba(255, 213, 100, 0.78)"
+          : "rgba(239, 97, 88, 0.8)";
     ctx.fillRect(-width / 2, y, width * hpRatio, 4);
+    ctx.restore();
   }
 
   drawProjectile(ctx, projectile) {

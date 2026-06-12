@@ -246,10 +246,18 @@ function getTowerStatLines(tower) {
 
 function getStartWaveLabel(game) {
   if (game.waveManager.running) return "Wave Active";
+  if (game.firstWaveCountdown != null && game.completedWave === 0 && game.waveManager.hasMoreWaves()) {
+    return `Wave in ${Math.ceil(game.firstWaveCountdown)}s`;
+  }
   if (game.state === "waveComplete" && game.nextWaveCountdown != null && game.waveManager.hasMoreWaves()) {
     return `Start Wave ${Math.ceil(game.nextWaveCountdown)}s`;
   }
   return "Start Wave";
+}
+
+function getTowerUnlockText(game, tower) {
+  const level = game.getTowerUnlockLevel?.(tower.id) || 1;
+  return level > 1 ? `Castle Lv.${level}` : "";
 }
 
 function formatCooldown(seconds) {
@@ -453,6 +461,7 @@ export class UI {
       this.drawAbilityHud(ctx, game);
       this.drawGamePanel(ctx, game);
       this.drawCastleHud(ctx, game);
+      this.drawFirstWaveCountdown(ctx, game);
       this.drawTargetingHint(ctx, game);
     }
 
@@ -464,6 +473,7 @@ export class UI {
     if (game.state === "victory") this.drawEndScreen(ctx, game, "Victory");
     if (game.state === "leaderboard") this.drawLeaderboard(ctx, game);
     if (game.talentPanelOpen) this.drawTalentPanel(ctx, game);
+    if (game.tutorialOpen) this.drawTutorialOverlay(ctx, game);
   }
 
   drawButton(ctx, button) {
@@ -694,7 +704,9 @@ export class UI {
     for (let i = 0; i < TOWER_TYPES.length; i += 1) {
       const tower = TOWER_TYPES[i];
       const rect = { x, y: y + i * (rowH + gap), w, h: rowH };
-      const enabled = game.unlockedTowers.includes(tower.id) && game.gold >= tower.cost;
+      const unlocked = game.unlockedTowers.includes(tower.id);
+      const canAfford = game.gold >= tower.cost;
+      const enabled = unlocked && canAfford;
       const name = this.getTowerDisplayName(game, tower).replace(" Tower", "").replace(" Post", "");
       this.addButton("selectTowerType", rect, `${name} ${tower.cost}`, {
         meta: { typeId: tower.id },
@@ -704,10 +716,25 @@ export class UI {
       const button = this.buttons[this.buttons.length - 1];
       this.drawButton(ctx, button);
       this.drawTowerIcon(ctx, game, tower, rect.x + 19, rect.y + rect.h * 0.5, 11, 12);
-      if (!enabled) {
+      if (!unlocked) {
+        this.drawTowerLockBadge(ctx, rect.x + rect.w - 78, rect.y + 4, 68, 17, getTowerUnlockText(game, tower));
+      } else if (!canAfford) {
         drawFittedText(ctx, "low", rect.x + rect.w - 9, rect.y + rect.h * 0.5, 34, 10, "#b9ab8e", "right", "600");
       }
     }
+  }
+
+  drawTowerLockBadge(ctx, x, y, w, h, label) {
+    if (!label) return;
+    ctx.save();
+    roundRect(ctx, x, y, w, h, 5);
+    ctx.fillStyle = "rgba(18, 13, 9, 0.9)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 213, 100, 0.55)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    drawFittedText(ctx, label, x + w * 0.5, y + h * 0.5, w - 8, 10, "#ffd564", "center", "800");
+    ctx.restore();
   }
 
   getTowerIconSprite(game, tower) {
@@ -986,17 +1013,20 @@ export class UI {
       const tower = TOWER_TYPES[i];
       const rowY = listY + i * (rowH + gap);
       const canAfford = game.gold >= tower.cost;
+      const unlocked = game.unlockedTowers.includes(tower.id);
       const isSelected = game.selectedTowerType === tower.id;
       const towerName = this.getTowerDisplayName(game, tower);
       this.addButton("selectTowerType", { x: x + 6, y: rowY, w: w - 12, h: rowH }, `${towerName}  ${tower.cost}`, {
         meta: { typeId: tower.id },
-        enabled: game.unlockedTowers.includes(tower.id) && canAfford,
+        enabled: unlocked && canAfford,
         kind: isSelected ? "gold" : "default",
       });
       const button = this.buttons[this.buttons.length - 1];
       this.drawButton(ctx, button);
       this.drawTowerIcon(ctx, game, tower, button.rect.x + 17, button.rect.y + rowH * 0.5, tight ? 7 : 8, tight ? 9 : 10);
-      if (!canAfford) {
+      if (!unlocked) {
+        this.drawTowerLockBadge(ctx, button.rect.x + button.rect.w - 82, button.rect.y + 4, 72, 17, getTowerUnlockText(game, tower));
+      } else if (!canAfford) {
         drawFittedText(ctx, "low gold", button.rect.x + button.rect.w - 10, button.rect.y + rowH * 0.5, 64, 10, "#b9ab8e", "right", "600");
       }
     }
@@ -1221,7 +1251,9 @@ export class UI {
     for (let i = 0; i < TOWER_TYPES.length; i += 1) {
       const tower = TOWER_TYPES[i];
       const rect = { x: x + i * (buttonW + gap), y, w: buttonW, h: buttonH };
-      const enabled = game.unlockedTowers.includes(tower.id) && game.gold >= tower.cost;
+      const unlocked = game.unlockedTowers.includes(tower.id);
+      const canAfford = game.gold >= tower.cost;
+      const enabled = unlocked && canAfford;
       const towerName = this.getTowerDisplayName(game, tower);
       this.addButton("selectTowerType", rect, compact ? tower.icon : towerName.replace(" Tower", ""), {
         meta: { typeId: tower.id },
@@ -1232,6 +1264,9 @@ export class UI {
       this.drawButton(ctx, button);
       this.drawTowerIcon(ctx, game, tower, rect.x + rect.w * 0.5, rect.y + 21, compact ? 10 : 13, compact ? 11 : 13);
       drawFittedText(ctx, `${tower.cost}`, rect.x + rect.w * 0.5, rect.y + rect.h - 13, rect.w - 8, 12, enabled ? "#ffd564" : "#9a8c75", "center", "600");
+      if (!unlocked) {
+        this.drawTowerLockBadge(ctx, rect.x + 4, rect.y + 4, rect.w - 8, 15, getTowerUnlockText(game, tower));
+      }
     }
   }
 
@@ -1653,6 +1688,99 @@ export class UI {
     drawFittedText(ctx, `${ability?.name || "Ability"}: click map`, rect.x + 12, rect.y + 21, rect.w - 88, 14, "#f7edd5", "left");
     this.addButton("cancelAbility", { x: rect.x + rect.w - 72, y: rect.y + 8, w: 60, h: 26 }, "Cancel");
     this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+  }
+
+  drawFirstWaveCountdown(ctx, game) {
+    if (game.firstWaveCountdown == null || game.completedWave !== 0 || game.waveManager.running || game.tutorialOpen) return;
+    const play = game.camera.playRect;
+    const width = Math.min(320, play.w - 24);
+    const rect = {
+      x: play.x + (play.w - width) * 0.5,
+      y: play.y + 12,
+      w: width,
+      h: 38,
+    };
+    ctx.save();
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 7);
+    ctx.fillStyle = "rgba(24, 18, 13, 0.92)";
+    ctx.fill();
+    drawPanelTexture(ctx, rect, rect.w + Math.ceil(game.firstWaveCountdown), 0.1);
+    ctx.strokeStyle = "rgba(255, 213, 100, 0.58)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    drawFittedText(ctx, `First wave starts in ${Math.ceil(game.firstWaveCountdown)}s`, rect.x + rect.w * 0.5, rect.y + 19, rect.w - 18, 15, "#ffd564", "center", "800");
+    ctx.restore();
+  }
+
+  drawTutorialOverlay(ctx, game) {
+    this.addBlockingRect({ x: 0, y: 0, w: this.lastWidth, h: this.lastHeight });
+    this.drawScrim(ctx, 0.68);
+
+    const portrait = this.lastHeight > this.lastWidth;
+    const width = Math.min(portrait ? 420 : 560, this.lastWidth - 28);
+    const height = Math.min(portrait ? 438 : 390, this.lastHeight - 28);
+    const x = (this.lastWidth - width) * 0.5;
+    const y = (this.lastHeight - height) * 0.5;
+    const rect = { x, y, w: width, h: height };
+    this.addButton("noop", rect, "");
+
+    ctx.save();
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 8);
+    ctx.fillStyle = "rgba(27, 21, 15, 0.98)";
+    ctx.fill();
+    drawPanelTexture(ctx, rect, rect.w + rect.h, 0.15);
+    ctx.strokeStyle = "rgba(255, 226, 154, 0.46)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    drawRivets(ctx, rect, "#b88a47");
+
+    drawFittedText(ctx, "First Battle", x + 22, y + 32, width - 44, 27, "#f7edd5", "left", "900");
+    drawFittedText(ctx, "Build quickly. The first wave will start automatically after this note.", x + 22, y + 62, width - 44, 13, "#ffd564", "left", "700");
+
+    const items = [
+      {
+        title: "Build towers",
+        body: portrait
+          ? "Open Choose Tower, drag a tower onto a free build tile, then release."
+          : "Choose a tower on the left, then click or drag it onto a free build tile.",
+      },
+      {
+        title: "Spend talents",
+        body: "Select the castle or press the glowing + when you have talent points. Talents reset each run and improve towers or abilities.",
+      },
+      {
+        title: "Watch unlocks",
+        body: "Locked towers show the required castle level directly on their button.",
+      },
+    ];
+
+    ctx.font = "600 13px Trebuchet MS, Arial, sans-serif";
+    let rowY = y + 102;
+    const textW = width - 86;
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
+      const iconX = x + 34;
+      const iconY = rowY + 18;
+      ctx.fillStyle = i === 0 ? "#c48a42" : i === 1 ? "#8f70ff" : "#ffd564";
+      ctx.beginPath();
+      ctx.arc(iconX, iconY, 16, 0, Math.PI * 2);
+      ctx.fill();
+      drawFittedText(ctx, `${i + 1}`, iconX, iconY, 20, 15, "#17110d", "center", "900");
+
+      drawFittedText(ctx, item.title, x + 62, rowY + 8, textW, 16, "#fff0b8", "left", "900");
+      const lines = wrapTextLines(ctx, item.body, textW, portrait ? 3 : 2);
+      for (let j = 0; j < lines.length; j += 1) {
+        drawFittedText(ctx, lines[j], x + 62, rowY + 31 + j * 16, textW, 12, "#e7dbc0", "left", "600");
+      }
+      rowY += portrait ? 94 : 78;
+    }
+
+    const buttonW = Math.min(220, width - 44);
+    this.addButton("closeTutorial", { x: x + width - buttonW - 22, y: y + height - 58, w: buttonW, h: 40 }, "Start Building", {
+      kind: "primary",
+    });
+    this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
+    ctx.restore();
   }
 
   drawCastleSelect(ctx, game) {
