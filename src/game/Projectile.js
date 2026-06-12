@@ -19,6 +19,7 @@ export class Projectile {
     this.special = data.special;
     this.color = data.color;
     this.sourceTower = data.sourceTower;
+    this.isCritical = !!data.isCritical;
     this.radius = data.attackType === "aoe" ? 6 : 4;
     this.sprite = data.projectileSprite || null;
     const initialDir = normalizeSafe(target.x - x, target.y - y);
@@ -55,6 +56,7 @@ export class Projectile {
       for (let i = 0; i < targets.length; i += 1) {
         const enemy = targets[i];
         enemy.applyDamage(enemy === this.target ? this.damage : this.damage * 0.55, this.damageType, game, this.sourceTower);
+        if (this.isCritical && enemy === this.target) this.spawnCritText(enemy, game);
         if (this.attackType === "slow") {
           enemy.applySlow(this.special.slowPercent, this.special.slowDuration);
         }
@@ -70,6 +72,7 @@ export class Projectile {
     }
 
     this.target.applyDamage(this.damage, this.damageType, game, this.sourceTower);
+    if (this.isCritical) this.spawnCritText(this.target, game);
     if (this.attackType === "slow") {
       this.target.applySlow(this.special.slowPercent, this.special.slowDuration);
     }
@@ -83,5 +86,13 @@ export class Projectile {
     if (this.target.active && curse > 0 && this.target.hp / this.target.maxHp <= 0.55) {
       this.target.applyVulnerability(curse, 3);
     }
+  }
+
+  spawnCritText(target, game) {
+    game.spawnEffect("text", target.x, target.y - target.radius - 18, {
+      text: "CRIT",
+      color: "#fff0a6",
+      vy: -20,
+    });
   }
 }

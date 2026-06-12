@@ -689,13 +689,6 @@ export class Renderer {
       ctx.arc(0, 0, enemy.radius * 1.55, 0, TAU);
       ctx.stroke();
     }
-    if (enemy.judgementTimer > 0) {
-      ctx.strokeStyle = "#ffe28f";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(0, -enemy.radius * 0.3, enemy.radius * 1.75, 0, TAU);
-      ctx.stroke();
-    }
   }
 
   drawEnemyHpBar(ctx, enemy, y, width) {

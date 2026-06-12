@@ -202,11 +202,13 @@ export class Tower {
       return;
     }
 
-    const damage = this.rollDamage();
+    const damage = this.rollDamage(game);
+    const isCritical = this.lastAttackWasCritical;
 
     if (this.attackType === "instant") {
       target.applyDamage(damage, this.damageType, game, this);
       this.applySpecialEffects(target, game);
+      if (isCritical) this.spawnCritText(target, game);
       game.spawnEffect("beam", this.x, this.y, {
         x2: target.x,
         y2: target.y,
@@ -228,12 +230,14 @@ export class Tower {
         color: this.config.color,
         sourceTower: this,
         projectileSprite: this.config.projectileSprite,
+        isCritical,
       },
     );
   }
 
   chainAttack(target, game) {
-    let damage = this.rollDamage();
+    let damage = this.rollDamage(game);
+    const isCritical = this.lastAttackWasCritical;
     const targets = game.queryEnemiesInRange(
       target.x,
       target.y,
@@ -250,6 +254,7 @@ export class Tower {
       if (!enemy.active) continue;
       enemy.applyDamage(damage, this.damageType, game, this);
       this.applySpecialEffects(enemy, game);
+      if (isCritical && hits === 0) this.spawnCritText(enemy, game);
       game.spawnEffect("beam", this.x, this.y, {
         x2: enemy.x,
         y2: enemy.y,
@@ -261,6 +266,14 @@ export class Tower {
     }
   }
 
+  spawnCritText(target, game) {
+    game.spawnEffect("text", target.x, target.y - target.radius - 18, {
+      text: "CRIT",
+      color: "#fff0a6",
+      vy: -20,
+    });
+  }
+
   applySpecialEffects(target, game = null) {
     if (!target?.active) return;
     if (this.special.slowPercent) target.applySlow(this.special.slowPercent, this.special.slowDuration || 1);
@@ -269,8 +282,11 @@ export class Tower {
     if (curse > 0 && target.hp / target.maxHp <= 0.55) target.applyVulnerability(curse, 3);
   }
 
-  rollDamage() {
-    return rollDamage(this.minDamage, this.maxDamage);
+  rollDamage(game = null) {
+    const baseDamage = rollDamage(this.minDamage, this.maxDamage);
+    const crit = game?.castleSystem?.rollTowerCrit?.(baseDamage);
+    this.lastAttackWasCritical = !!crit?.critical;
+    return crit?.damage || baseDamage;
   }
 
   canUpgrade() {

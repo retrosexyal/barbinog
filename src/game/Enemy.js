@@ -6,7 +6,7 @@ export class Enemy {
   }
 
   init(config, path, waveNumber) {
-    const waveScale = 1 + Math.max(0, waveNumber - 1) * 0.12;
+    const waveScale = 1.04 + Math.max(0, waveNumber - 1) * 0.13;
     this.active = true;
     this.id = config.id;
     this.name = config.name;
@@ -21,7 +21,7 @@ export class Enemy {
     this.armorType = config.armorType || "unarmored";
     this.maxHp = Math.floor(config.hp * waveScale);
     this.hp = this.maxHp;
-    this.baseSpeed = config.speed * (1 + Math.max(0, waveNumber - 1) * 0.012);
+    this.baseSpeed = config.speed * (1.02 + Math.max(0, waveNumber - 1) * 0.014);
     this.armor = config.armor + Math.floor(waveNumber / 5);
     this.rewardGold = config.rewardGold + Math.floor(waveNumber * 0.75);
     this.damageToBase = config.damageToBase;
@@ -39,8 +39,6 @@ export class Enemy {
     this.rootTimer = 0;
     this.vulnerabilityTimer = 0;
     this.increasedDamageTaken = 0;
-    this.judgementTimer = 0;
-    this.judgementVulnerability = 0;
     this._sample = { x: 0, y: 0, segmentIndex: 0 };
     path.getStart(this._sample);
     this.x = this._sample.x;
@@ -67,7 +65,7 @@ export class Enemy {
 
     if (this.poisonTimer > 0) {
       this.poisonTimer -= dt;
-      this.applyDamage(this.poisonDps * dt, "chaos", game, null, false);
+      this.applyDamage(this.poisonDps * dt, "magic", game, null, false);
       if (!this.active) return;
     }
 
@@ -78,11 +76,6 @@ export class Enemy {
     if (this.vulnerabilityTimer > 0) {
       this.vulnerabilityTimer = Math.max(0, this.vulnerabilityTimer - dt);
       if (this.vulnerabilityTimer <= 0) this.increasedDamageTaken = 0;
-    }
-
-    if (this.judgementTimer > 0) {
-      this.judgementTimer = Math.max(0, this.judgementTimer - dt);
-      if (this.judgementTimer <= 0) this.judgementVulnerability = 0;
     }
 
     if (this.traits.includes("regen")) {
@@ -121,8 +114,12 @@ export class Enemy {
   applyDamage(amount, damageType, game, sourceTower = null, showText = true) {
     if (!this.active) return 0;
     const multiplier = getAttackArmorMultiplier(damageType, this.armorType);
-    const damageTakenMultiplier = 1 + this.increasedDamageTaken + this.judgementVulnerability;
-    const finalDamage = Math.max(1, amount * multiplier - this.armor) * damageTakenMultiplier;
+    const damageTakenMultiplier = 1 + this.increasedDamageTaken;
+    // Continuous effects tick every frame; do not turn each tiny tick into 1 damage.
+    const mitigatedDamage = showText
+      ? Math.max(1, amount * multiplier - this.armor)
+      : Math.max(0, amount * multiplier);
+    const finalDamage = mitigatedDamage * damageTakenMultiplier;
     this.hp -= finalDamage;
 
     if (showText && finalDamage >= 8) {
@@ -164,9 +161,4 @@ export class Enemy {
     this.vulnerabilityTimer = Math.max(this.vulnerabilityTimer, duration);
   }
 
-  applyJudgement(percent, duration) {
-    if (percent <= 0 || duration <= 0) return;
-    this.judgementVulnerability = Math.max(this.judgementVulnerability, percent);
-    this.judgementTimer = Math.max(this.judgementTimer, duration);
-  }
 }

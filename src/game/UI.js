@@ -173,7 +173,27 @@ function getTalentContext(castle, talentId) {
   return null;
 }
 
-function getTalentNodeRect(x, y, w, h, index, total) {
+function getTalentNodeRect(x, y, w, h, index, total, talentConfig = null, branchConfig = null) {
+  if (Number.isFinite(talentConfig?.row) && Number.isFinite(talentConfig?.col)) {
+    let maxRow = 0;
+    let maxCol = 0;
+    const talents = branchConfig?.talents || [];
+    for (let i = 0; i < talents.length; i += 1) {
+      if (Number.isFinite(talents[i].row)) maxRow = Math.max(maxRow, talents[i].row);
+      if (Number.isFinite(talents[i].col)) maxCol = Math.max(maxCol, talents[i].col);
+    }
+    const iconSize = clamp(Math.min((w - 34) / Math.max(2.4, maxCol + 1.25), (h - 98) / Math.max(3.8, maxRow + 1.15)), 30, 52);
+    const usableH = Math.max(iconSize, h - 106);
+    const stepY = maxRow > 0 ? usableH / maxRow : 0;
+    const cx = x + 18 + (w - 36) * ((talentConfig.col + 0.5) / Math.max(1, maxCol + 1));
+    const cy = y + 58 + talentConfig.row * stepY;
+    return {
+      x: cx - iconSize * 0.5,
+      y: cy - iconSize * 0.5,
+      w: iconSize,
+      h: iconSize,
+    };
+  }
   const pattern = [0.5, 0.32, 0.68, 0.42, 0.58, 0.5];
   const iconSize = clamp(Math.min((w - 36) / 2.7, (h - 92) / Math.max(4.5, total * 0.95)), 36, 56);
   const usableH = Math.max(iconSize, h - 94);
@@ -252,6 +272,17 @@ function getCastleResource(castleState) {
   };
 }
 
+function getCastleUniqueResource(castleState) {
+  const resource = castleState?.uniqueResource;
+  if (!resource) return null;
+  return {
+    key: resource.key,
+    label: resource.label,
+    amount: Math.floor(resource.amount || 0),
+    max: resource.max || 0,
+  };
+}
+
 function getCastleResourceRatio(castleState) {
   const resource = getCastleResource(castleState);
   if (!resource.max) return 0;
@@ -271,7 +302,6 @@ function getEnemyDebuffs(enemy) {
   if (enemy?.poisonTimer > 0) debuffs.push(`Poison ${Math.round(enemy.poisonDps)}/s (${Math.ceil(enemy.poisonTimer)}s)`);
   if (enemy?.rootTimer > 0) debuffs.push(`Root (${Math.ceil(enemy.rootTimer)}s)`);
   if (enemy?.vulnerabilityTimer > 0) debuffs.push(`Vulnerable +${Math.round(enemy.increasedDamageTaken * 100)}%`);
-  if (enemy?.judgementTimer > 0) debuffs.push(`Judgement +${Math.round(enemy.judgementVulnerability * 100)}%`);
   return debuffs;
 }
 
@@ -1056,8 +1086,13 @@ export class UI {
     this.drawProgressBar(ctx, { x: x + 12, y: y + 62, w: w - 24, h: 12 }, getCastleXpRatio(castleState), castle.color, xpText);
 
     const resource = getCastleResource(castleState);
+    const uniqueResource = getCastleUniqueResource(castleState);
     const resourceText = resource.max ? `${resource.label} ${resource.amount}/${resource.max}` : `${resource.label} ${resource.amount}`;
     this.drawProgressBar(ctx, { x: x + 12, y: y + 82, w: w - 24, h: 12 }, getCastleResourceRatio(castleState), "#9e80ff", resourceText);
+    if (uniqueResource) {
+      const uniqueText = uniqueResource.max ? `${uniqueResource.label} ${uniqueResource.amount}/${uniqueResource.max}` : `${uniqueResource.label} ${uniqueResource.amount}`;
+      drawFittedText(ctx, uniqueText, x + 12, y + 101, w - 24, 12, "#cdbbff", "left", "800");
+    }
 
     const talentW = Math.min(80, w * 0.38);
     this.addButton("talents", { x: x + w - talentW - 10, y: y + 104, w: talentW, h: 28 }, "Talents", {
@@ -1255,8 +1290,10 @@ export class UI {
       h: height,
     };
     const resource = getCastleResource(castleState);
+    const uniqueResource = getCastleUniqueResource(castleState);
     const xpLabel = portrait ? "" : `XP ${castleState.xp}/${castleState.xpToNextLevel}`;
-    const resourceLabel = portrait ? "" : `Mana ${resource.amount}/${resource.max}`;
+    const uniqueLabel = uniqueResource ? `  ${uniqueResource.label} ${uniqueResource.amount}/${uniqueResource.max}` : "";
+    const resourceLabel = portrait ? "" : `Mana ${resource.amount}/${resource.max}${uniqueLabel}`;
 
     if (portrait) {
       const xpBar = { x: rect.x + 4, y: rect.y + 2, w: rect.w - 8, h: 5 };
@@ -1266,25 +1303,11 @@ export class UI {
       this.drawProgressBar(ctx, manaBar, getCastleResourceRatio(castleState), "#8f70ff", resourceLabel);
 
       if (castleState.talentPoints > 0) {
-        const plusSize = 18;
-        const plusRect = {
-          x: clamp(xpBar.x + xpBar.w - plusSize * 0.5, play.x + 8, play.x + play.w - plusSize - 8),
-          y: clamp(xpBar.y - plusSize - 4, play.y + 8, play.y + play.h - plusSize - 8),
-          w: plusSize,
-          h: plusSize,
-        };
-        this.addButton("talents", plusRect, "+", { kind: "gold" });
-        roundRect(ctx, plusRect.x, plusRect.y, plusRect.w, plusRect.h, 5);
-        const fill = ctx.createLinearGradient(plusRect.x, plusRect.y, plusRect.x, plusRect.y + plusRect.h);
-        fill.addColorStop(0, "#fff0a8");
-        fill.addColorStop(0.42, "#c18125");
-        fill.addColorStop(1, "#5b3612");
-        ctx.fillStyle = fill;
-        ctx.fill();
-        ctx.strokeStyle = "rgba(44, 27, 10, 0.86)";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        drawFittedText(ctx, "+", plusRect.x + plusRect.w * 0.5, plusRect.y + plusRect.h * 0.5 - 0.5, plusRect.w - 4, 17, "#fff7d6", "center", "900");
+        this.drawTalentPointButton(ctx, play, {
+          x: xpBar.x + xpBar.w - 9,
+          y: xpBar.y - 22,
+          size: 18,
+        });
       }
       return;
     }
@@ -1300,6 +1323,35 @@ export class UI {
     ctx.stroke();
     this.drawProgressBar(ctx, { x: rect.x + 6, y: rect.y + 5, w: rect.w - 12, h: 7 }, getCastleXpRatio(castleState), castle.color, xpLabel);
     this.drawProgressBar(ctx, { x: rect.x + 6, y: rect.y + 16, w: rect.w - 12, h: 7 }, getCastleResourceRatio(castleState), "#8f70ff", resourceLabel);
+    if (castleState.talentPoints > 0) {
+      this.drawTalentPointButton(ctx, play, {
+        x: rect.x + rect.w + 5,
+        y: rect.y + (rect.h - 22) * 0.5,
+        size: 22,
+      });
+    }
+  }
+
+  drawTalentPointButton(ctx, play, placement) {
+    const plusSize = placement.size;
+    const plusRect = {
+      x: clamp(placement.x, play.x + 8, play.x + play.w - plusSize - 8),
+      y: clamp(placement.y, play.y + 8, play.y + play.h - plusSize - 8),
+      w: plusSize,
+      h: plusSize,
+    };
+    this.addButton("talents", plusRect, "+", { kind: "gold" });
+    roundRect(ctx, plusRect.x, plusRect.y, plusRect.w, plusRect.h, 5);
+    const fill = ctx.createLinearGradient(plusRect.x, plusRect.y, plusRect.x, plusRect.y + plusRect.h);
+    fill.addColorStop(0, "#fff0a8");
+    fill.addColorStop(0.42, "#c18125");
+    fill.addColorStop(1, "#5b3612");
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = "rgba(44, 27, 10, 0.86)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    drawFittedText(ctx, "+", plusRect.x + plusRect.w * 0.5, plusRect.y + plusRect.h * 0.5 - 0.5, plusRect.w - 4, Math.min(19, plusSize - 1), "#fff7d6", "center", "900");
   }
 
   drawAbilityHud(ctx, game) {
@@ -1749,7 +1801,7 @@ export class UI {
 
     const nodeRects = [];
     for (let i = 0; i < branchConfig.talents.length; i += 1) {
-      nodeRects.push(getTalentNodeRect(x, y, w, h, i, branchConfig.talents.length));
+      nodeRects.push(getTalentNodeRect(x, y, w, h, i, branchConfig.talents.length, branchConfig.talents[i], branchConfig));
     }
 
     ctx.save();
@@ -1922,7 +1974,7 @@ export class UI {
     if (unlocked) status = "Этот талант уже изучен.";
     else if (canUnlock) status = `Стоимость: ${talentConfig.cost} очко талантов.`;
     else if (talentConfig.prerequisite && !castleState.unlockedTalentIds.includes(talentConfig.prerequisite)) status = "Сначала нужно изучить предыдущий талант.";
-    else if (talentConfig.final && castleState.finalTalentId) status = "Финальный талант уже выбран в другой ветке.";
+    else if (talentConfig.requiredPoints && game.castleSystem.getBranchSpentPoints(talentConfig.branch) < talentConfig.requiredPoints) status = `Нужно очков в этой ветке: ${talentConfig.requiredPoints}.`;
     else if (castleState.talentPoints < talentConfig.cost) status = `Нужно очков талантов: ${talentConfig.cost}.`;
 
     ctx.save();
@@ -2099,7 +2151,7 @@ export class UI {
     if (unlocked) status = "Learned";
     else if (canUnlock) status = `Click to learn: ${talentConfig.cost} point`;
     else if (talentConfig.prerequisite && !castleState.unlockedTalentIds.includes(talentConfig.prerequisite)) status = "Requires the previous talent";
-    else if (talentConfig.final && castleState.finalTalentId) status = "Another final talent is already learned";
+    else if (talentConfig.requiredPoints && game.castleSystem.getBranchSpentPoints(talentConfig.branch) < talentConfig.requiredPoints) status = `Requires ${talentConfig.requiredPoints} points in this tree`;
     else if (castleState.talentPoints < talentConfig.cost) status = `Need ${talentConfig.cost} talent point`;
 
     ctx.save();

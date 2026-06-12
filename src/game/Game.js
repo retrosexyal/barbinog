@@ -27,8 +27,8 @@ const START_LIVES = 20;
 const SPATIAL_CELL = 128;
 const TOWER_UNLOCKS = Object.freeze([
   { level: 1, count: 3 },
-  { level: 20, count: 6 },
-  { level: 40, count: 9 },
+  { level: 9, count: 6 },
+  { level: 13, count: 9 },
 ]);
 
 function getUnlockedTowerIds(castleLevel = 1) {
