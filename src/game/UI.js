@@ -337,6 +337,50 @@ function getAbilityPalette(abilityId) {
   return palettes[abilityId] || ["#241b14", "#725432", "#ffd564", "#f7edd5"];
 }
 
+const ABILITY_ICON_SOURCES = Object.freeze({
+  heavenlyStrike: new URL("../assets/ui/abilities/heavenly-strike.png", import.meta.url).href,
+  rallyHorn: new URL("../assets/ui/abilities/rally-horn.png", import.meta.url).href,
+  thornRain: new URL("../assets/ui/abilities/thorn-rain.png", import.meta.url).href,
+  ancientRoots: new URL("../assets/ui/abilities/ancient-roots.png", import.meta.url).href,
+  fingerOfDeath: new URL("../assets/ui/abilities/finger-of-death.png", import.meta.url).href,
+  plagueCloud: new URL("../assets/ui/abilities/plague-cloud.png", import.meta.url).href,
+});
+
+const TALENT_ICON_SOURCES = Object.freeze({
+  damage: new URL("../assets/ui/talents/damage.png", import.meta.url).href,
+  speed: new URL("../assets/ui/talents/speed.png", import.meta.url).href,
+  range: new URL("../assets/ui/talents/range.png", import.meta.url).href,
+  shield: new URL("../assets/ui/talents/shield.png", import.meta.url).href,
+  poison: new URL("../assets/ui/talents/poison.png", import.meta.url).href,
+  roots: new URL("../assets/ui/talents/roots.png", import.meta.url).href,
+  soul: new URL("../assets/ui/talents/soul.png", import.meta.url).href,
+  magic: new URL("../assets/ui/talents/magic.png", import.meta.url).href,
+});
+
+const uiIconImages = new Map();
+
+function getUiIconImage(src) {
+  if (!src || typeof Image === "undefined") return null;
+  if (uiIconImages.has(src)) return uiIconImages.get(src);
+  const image = new Image();
+  image.decoding = "async";
+  image.src = src;
+  uiIconImages.set(src, image);
+  return image;
+}
+
+function drawUiIconImage(ctx, src, rect, alpha = 1) {
+  const image = getUiIconImage(src);
+  if (!image || !image.complete || !image.naturalWidth || !image.naturalHeight) return false;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 4);
+  ctx.clip();
+  ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
+  ctx.restore();
+  return true;
+}
+
 function getAbilityCostText(game, ability) {
   const cost = game.castleSystem?.getAbilityCost(ability) || 0;
   const soulCost = game.castleSystem?.getAbilitySoulCost?.(ability) || 0;
@@ -1637,7 +1681,9 @@ export class UI {
     ctx.save();
     roundRect(ctx, inner.x + 1, inner.y + 1, inner.w - 2, inner.h - 2, 3);
     ctx.clip();
-    this.drawAbilityIconArt(ctx, ability.id, inner, palette);
+    if (!drawUiIconImage(ctx, ABILITY_ICON_SOURCES[ability.id], inner)) {
+      this.drawAbilityIconArt(ctx, ability.id, inner, palette);
+    }
     ctx.restore();
 
     if (!state.castable || cooldown > 0) {
@@ -2187,8 +2233,11 @@ export class UI {
       ctx.lineTo(rect.x + rect.w - 6, yy + ((seed + i) % 7) - 3);
       ctx.stroke();
     }
-    ctx.globalAlpha = locked ? 0.45 : 1;
-    this.drawTalentGlyph(ctx, kind, rect.x + rect.w * 0.5, rect.y + rect.h * 0.5, rect.w * 0.68, locked ? "#d2d0c9" : "#fff4d0");
+    ctx.globalAlpha = 1;
+    if (!drawUiIconImage(ctx, TALENT_ICON_SOURCES[kind], rect, locked ? 0.52 : 1)) {
+      ctx.globalAlpha = locked ? 0.45 : 1;
+      this.drawTalentGlyph(ctx, kind, rect.x + rect.w * 0.5, rect.y + rect.h * 0.5, rect.w * 0.68, locked ? "#d2d0c9" : "#fff4d0");
+    }
 
     if (locked) {
       ctx.globalAlpha = 0.55;
