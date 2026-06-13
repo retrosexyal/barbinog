@@ -13,6 +13,10 @@ const SHARED_MAP_ART_ASSETS = Object.freeze({
 export const MAP_ART_ASSET_SETS = Object.freeze({
   human: Object.freeze({
     ...SHARED_MAP_ART_ASSETS,
+    pathTileStraight: new URL("../assets/map/path-tile-straight.png", import.meta.url).href,
+    pathTileCorner: new URL("../assets/map/path-tile-corner.png", import.meta.url).href,
+    pathTileT: new URL("../assets/map/path-tile-t.png", import.meta.url).href,
+    pathTileCross: new URL("../assets/map/path-tile-cross.png", import.meta.url).href,
     background: Object.freeze({
       horizontal: new URL("../assets/map/bg_human.webp", import.meta.url).href,
       vertical: new URL("../assets/map/bg_human_vertical.jpeg", import.meta.url).href,
@@ -83,6 +87,21 @@ function tileKey(x, y) {
   return `${x},${y}`;
 }
 
+const PATH_DIRECTIONS = Object.freeze([
+  Object.freeze({ bit: 1, dx: 0, dy: -1 }),
+  Object.freeze({ bit: 2, dx: 1, dy: 0 }),
+  Object.freeze({ bit: 4, dx: 0, dy: 1 }),
+  Object.freeze({ bit: 8, dx: -1, dy: 0 }),
+]);
+
+function countBits(mask) {
+  let count = 0;
+  for (let value = mask; value > 0; value >>= 1) {
+    count += value & 1;
+  }
+  return count;
+}
+
 export class MapArt {
   constructor(images) {
     this.images = images;
@@ -119,6 +138,8 @@ export class MapArt {
   }
 
   drawPath(ctx, map, path) {
+    if (this.drawPathTiles(ctx, map)) return;
+
     const image = this.getImage("pathFill");
     if (!image || !path?.points?.length) return;
 
@@ -137,6 +158,76 @@ export class MapArt {
     }
     ctx.stroke();
     ctx.restore();
+  }
+
+  drawPathTiles(ctx, map) {
+    const images = {
+      straight: this.getImage("pathTileStraight"),
+      corner: this.getImage("pathTileCorner"),
+      t: this.getImage("pathTileT"),
+      cross: this.getImage("pathTileCross"),
+    };
+    if (!images.straight || !images.corner || !images.t || !images.cross) return false;
+
+    const pathTiles = map.pathTiles || [];
+    const pathSet = map.path || new Set(pathTiles.map((tile) => tileKey(tile.x, tile.y)));
+    if (!pathTiles.length || !pathSet.size) return false;
+
+    const tile = map.tileSize;
+    const drawSize = tile;
+
+    ctx.save();
+    for (let i = 0; i < pathTiles.length; i += 1) {
+      const { x, y } = pathTiles[i];
+      const config = this.getPathTileConfig(pathSet, x, y, images);
+      if (!config) continue;
+
+      const centerX = x * tile + tile * 0.5;
+      const centerY = y * tile + tile * 0.5;
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.rotate(config.rotation);
+      ctx.drawImage(config.image, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+      ctx.restore();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  getPathTileConfig(pathSet, x, y, images) {
+    let mask = 0;
+    for (let i = 0; i < PATH_DIRECTIONS.length; i += 1) {
+      const direction = PATH_DIRECTIONS[i];
+      if (pathSet.has(tileKey(x + direction.dx, y + direction.dy))) mask |= direction.bit;
+    }
+
+    const connections = countBits(mask);
+    if (connections >= 4) return { image: images.cross, rotation: 0 };
+    if (connections === 3) return { image: images.t, rotation: this.getTJunctionRotation(mask) };
+    if (connections === 2) {
+      if (mask === 5) return { image: images.straight, rotation: Math.PI / 2 };
+      if (mask === 10) return { image: images.straight, rotation: 0 };
+      return { image: images.corner, rotation: this.getCornerRotation(mask) };
+    }
+    if (mask === 1 || mask === 4) return { image: images.straight, rotation: Math.PI / 2 };
+    if (mask === 2 || mask === 8) return { image: images.straight, rotation: 0 };
+    return null;
+  }
+
+  getCornerRotation(mask) {
+    if (mask === 6) return 0;
+    if (mask === 12) return Math.PI / 2;
+    if (mask === 9) return Math.PI;
+    if (mask === 3) return -Math.PI / 2;
+    return 0;
+  }
+
+  getTJunctionRotation(mask) {
+    if (mask === 14) return 0;
+    if (mask === 13) return Math.PI / 2;
+    if (mask === 11) return Math.PI;
+    if (mask === 7) return -Math.PI / 2;
+    return 0;
   }
 
   getImage(name) {

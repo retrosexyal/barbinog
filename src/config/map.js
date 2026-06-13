@@ -207,6 +207,7 @@ export const MAP_CONFIG = Object.freeze({
   basePosition: { x: sx(9), y: 12 },
   towerFootprint,
   decorations,
+  pathTiles: toTiles(pathBlockedSet),
   buildableTiles: toTiles(buildableSet),
   placementTiles: toTiles(placementSet),
   blockedTiles: toTiles(blockedSet),

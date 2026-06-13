@@ -8,9 +8,11 @@ export class GameMap {
     this.basePosition = config.basePosition;
     this.towerFootprint = config.towerFootprint || { width: 1, height: 1 };
     this.decorations = config.decorations || [];
+    this.pathTiles = config.pathTiles || config.blockedTiles;
     this.buildableTiles = config.buildableTiles;
     this.placementTiles = config.placementTiles || config.buildableTiles;
     this.blockedTiles = config.blockedTiles;
+    this.path = new Set(this.pathTiles.map((tile) => this.key(tile.x, tile.y)));
     this.buildable = new Set(config.buildableTiles.map((tile) => this.key(tile.x, tile.y)));
     this.placement = new Set(this.placementTiles.map((tile) => this.key(tile.x, tile.y)));
     this.blocked = new Set(config.blockedTiles.map((tile) => this.key(tile.x, tile.y)));
@@ -30,7 +32,7 @@ export class GameMap {
   }
 
   isPathTile(x, y) {
-    return this.blocked.has(this.key(x, y));
+    return this.path.has(this.key(x, y));
   }
 
   isBuildableTile(x, y) {
