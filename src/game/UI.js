@@ -147,6 +147,7 @@ function getBranchPalette(branchId) {
 
 function getTalentKind(talentConfig) {
   const effect = talentConfig.effects?.[0] || {};
+  if (effect.type === "abilityUnlock") return "magic";
   const stat = `${effect.stat || ""} ${effect.abilityId || ""} ${talentConfig.id || ""}`.toLowerCase();
   if (stat.includes("poison") || stat.includes("plague")) return "poison";
   if (stat.includes("root") || stat.includes("slow")) return "roots";
@@ -159,13 +160,23 @@ function getTalentKind(talentConfig) {
   return "magic";
 }
 
-function getBranchSpentPoints(branchConfig, unlockedIds) {
+function getBranchSpentPoints(branchConfig, castleState) {
   let spent = 0;
   for (let i = 0; i < branchConfig.talents.length; i += 1) {
     const talentConfig = branchConfig.talents[i];
-    if (unlockedIds.includes(talentConfig.id)) spent += talentConfig.cost;
+    spent += getTalentRank(castleState, talentConfig.id) * talentConfig.cost;
   }
   return spent;
+}
+
+function getTalentMaxRank(talentConfig) {
+  return Math.max(1, talentConfig?.maxRank || 1);
+}
+
+function getTalentRank(castleState, talentId) {
+  const explicitRank = castleState?.talentRanks?.[talentId];
+  if (Number.isFinite(explicitRank)) return explicitRank;
+  return castleState?.unlockedTalentIds?.includes(talentId) ? 1 : 0;
 }
 
 function getTalentContext(castle, talentId) {
@@ -179,6 +190,31 @@ function getTalentContext(castle, talentId) {
   return null;
 }
 
+function getTalentTierRequiredLevel(talentConfig) {
+  const rowLevels = [1, 3, 6, 9, 12, 15, 18, 21];
+  const rowLevel = Number.isFinite(talentConfig?.row)
+    ? rowLevels[talentConfig.row] || 1
+    : 1;
+  return Math.max(rowLevel, talentConfig?.requiredLevel || 1);
+}
+
+function getTalentRequiredPreviousTierPoints(talentConfig) {
+  const rowPoints = [0, 3, 5, 8, 11, 14, 17, 20];
+  return Number.isFinite(talentConfig?.row) ? rowPoints[talentConfig.row] || 0 : 0;
+}
+
+function getBranchPreviousTierSpentPoints(branchConfig, castleState, row) {
+  if (!Number.isFinite(row) || row <= 0) return 0;
+  let spent = 0;
+  const talents = branchConfig?.talents || [];
+  for (let i = 0; i < talents.length; i += 1) {
+    const talentConfig = talents[i];
+    if (!Number.isFinite(talentConfig.row) || talentConfig.row >= row) continue;
+    spent += getTalentRank(castleState, talentConfig.id) * talentConfig.cost;
+  }
+  return spent;
+}
+
 function getTalentNodeRect(x, y, w, h, index, total, talentConfig = null, branchConfig = null) {
   if (Number.isFinite(talentConfig?.row) && Number.isFinite(talentConfig?.col)) {
     let maxRow = 0;
@@ -188,8 +224,10 @@ function getTalentNodeRect(x, y, w, h, index, total, talentConfig = null, branch
       if (Number.isFinite(talents[i].row)) maxRow = Math.max(maxRow, talents[i].row);
       if (Number.isFinite(talents[i].col)) maxCol = Math.max(maxCol, talents[i].col);
     }
-    const iconSize = clamp(Math.min((w - 34) / Math.max(2.4, maxCol + 1.25), (h - 98) / Math.max(3.8, maxRow + 1.15)), 30, 52);
-    const usableH = Math.max(iconSize, h - 106);
+    const crowded = maxRow >= 6;
+    const footerReserve = crowded ? 138 : 106;
+    const iconSize = clamp(Math.min((w - 34) / Math.max(2.4, maxCol + 1.25), (h - footerReserve + 8) / Math.max(3.8, maxRow + 1.15)), 30, 52);
+    const usableH = Math.max(iconSize, h - footerReserve);
     const stepY = maxRow > 0 ? usableH / maxRow : 0;
     const cx = x + 18 + (w - 36) * ((talentConfig.col + 0.5) / Math.max(1, maxCol + 1));
     const cy = y + 58 + talentConfig.row * stepY;
@@ -382,12 +420,14 @@ function drawUiIconImage(ctx, src, rect, alpha = 1) {
 }
 
 function getAbilityCostText(game, ability) {
+  if (ability?.passive) return "";
   const cost = game.castleSystem?.getAbilityCost(ability) || 0;
   const soulCost = game.castleSystem?.getAbilitySoulCost?.(ability) || 0;
   return [cost ? `${cost}M` : "", soulCost ? `${soulCost}S` : ""].filter(Boolean).join(" ");
 }
 
 function getAbilityTargetText(ability) {
+  if (ability?.passive) return "Passive";
   const targets = {
     area: `Target area${ability.areaRadius ? `, radius ${Math.round(ability.areaRadius)}` : ""}`,
     self: "Instant castle buff",
@@ -1332,7 +1372,7 @@ export class UI {
     const cooldown = castleState?.activeCooldowns?.[ability.id] || 0;
     const cost = game.castleSystem?.getAbilityCost(ability) || 0;
     const soulCost = game.castleSystem?.getAbilitySoulCost?.(ability) || 0;
-    const enabled = game.castleSystem?.canCastAbility(ability.id) && game.state !== "paused";
+    const enabled = ability.passive || (game.castleSystem?.canCastAbility(ability.id) && game.state !== "paused");
     const costParts = [];
     if (cost) costParts.push(`${cost}M`);
     if (soulCost) costParts.push(`${soulCost}S`);
@@ -1359,7 +1399,7 @@ export class UI {
     });
     this.drawButton(ctx, this.buttons[this.buttons.length - 1]);
 
-    const title = cooldown > 0 ? `${ability.name} ${formatCooldown(cooldown)}` : `${ability.name}${costText}`;
+    const title = ability.passive ? `${ability.name} Passive` : cooldown > 0 ? `${ability.name} ${formatCooldown(cooldown)}` : `${ability.name}${costText}`;
     const textX = icon.x + icon.w + 8;
     drawFittedText(ctx, title, textX, rect.y + (compact ? rect.h * 0.5 : 16), rect.w - icon.w - 18, compact ? 12 : 13, enabled ? "#f7edd5" : "#9f9787", "left", "700");
     if (!compact) {
@@ -1596,7 +1636,7 @@ export class UI {
       w: game.camera.worldWidth * game.camera.scale,
       h: game.camera.worldHeight * game.camera.scale,
     };
-    const abilities = castle.abilities || [];
+    const abilities = game.castleSystem?.getUnlockedAbilities?.() || [];
     if (!abilities.length) return;
 
     const portrait = game.camera.height > game.camera.width;
@@ -1614,7 +1654,7 @@ export class UI {
       const ability = abilities[i];
       const rect = { x: baseX + i * (iconSize + gap), y: baseY, w: iconSize, h: iconSize };
       const buttonEnabled = game.state !== "gameOver" && game.state !== "victory";
-      const castable = game.castleSystem?.canCastAbility(ability.id) && game.state !== "paused";
+      const castable = ability.passive || (game.castleSystem?.canCastAbility(ability.id) && game.state !== "paused");
       const hovered = this.pointer.type === "mouse" && rectContains(rect, this.pointer.x, this.pointer.y);
       const held = this.isAbilityHoldVisible(ability.id);
       this.addButton("activeAbility", rect, ability.name, {
@@ -1622,7 +1662,7 @@ export class UI {
         enabled: buttonEnabled,
         kind: game.pendingAbilityId === ability.id ? "gold" : "primary",
       });
-      this.drawAbilityIconButton(ctx, game, ability, rect, { castable, hovered, pending: game.pendingAbilityId === ability.id });
+      this.drawAbilityIconButton(ctx, game, ability, rect, { castable, hovered, passive: ability.passive, pending: game.pendingAbilityId === ability.id });
       if (hovered || held) {
         tooltipAbility = ability;
         tooltipAnchor = rect;
@@ -1837,7 +1877,7 @@ export class UI {
     const play = game.camera.playRect;
     const costText = getAbilityCostText(game, ability);
     const cooldown = game.castleSystem?.state?.activeCooldowns?.[ability.id] || 0;
-    const cooldownText = cooldown > 0 ? `Cooldown ${formatCooldown(cooldown)}` : `Cooldown ${Math.round(game.castleSystem?.getAbilityCooldown?.(ability) || ability.cooldown || 0)}s`;
+    const cooldownText = ability.passive ? "Passive" : cooldown > 0 ? `Cooldown ${formatCooldown(cooldown)}` : `Cooldown ${Math.round(game.castleSystem?.getAbilityCooldown?.(ability) || ability.cooldown || 0)}s`;
     const details = [ability.description || "", getAbilityTargetText(ability), cooldownText, costText ? `Cost ${costText}` : ""].filter(Boolean);
     const width = Math.min(310, Math.max(226, play.w - 24));
     ctx.save();
@@ -1872,8 +1912,7 @@ export class UI {
 
   drawTargetingHint(ctx, game) {
     if (!game.pendingAbilityId) return;
-    const castle = game.castleSystem?.selectedCastle;
-    const ability = castle?.abilities.find((item) => item.id === game.pendingAbilityId);
+    const ability = game.castleSystem?.getUnlockedAbility?.(game.pendingAbilityId);
     const play = game.camera.playRect;
     const rect = { x: play.x + play.w * 0.5 - 150, y: play.y + 14, w: 300, h: 42 };
     this.addBlockingRect(rect);
@@ -2108,7 +2147,7 @@ export class UI {
     const tabW = (rect.w - 28 - gap * 2) / Math.max(1, castle.branches.length);
     for (let i = 0; i < castle.branches.length; i += 1) {
       const branchConfig = castle.branches[i];
-      const spent = getBranchSpentPoints(branchConfig, castleState.unlockedTalentIds);
+      const spent = getBranchSpentPoints(branchConfig, castleState);
       const tab = { x: rect.x + 14 + i * (tabW + gap), y: tabY, w: tabW, h: tabH };
       const active = i === this.activeTalentTabIndex;
       const palette = getBranchPalette(branchConfig.id);
@@ -2128,7 +2167,7 @@ export class UI {
 
   drawTalentBranch(ctx, game, branchConfig, x, y, w, h, expanded) {
     const castleState = game.castleSystem.state;
-    const spent = getBranchSpentPoints(branchConfig, castleState.unlockedTalentIds);
+    const spent = getBranchSpentPoints(branchConfig, castleState);
     const palette = getBranchPalette(branchConfig.id);
     roundRect(ctx, x, y, w, h, 6);
     const fill = ctx.createLinearGradient(x, y, x, y + h);
@@ -2158,8 +2197,9 @@ export class UI {
       if (fromIndex < 0) continue;
       const from = nodeRects[fromIndex];
       const to = nodeRects[i];
-      const fromUnlocked = castleState.unlockedTalentIds.includes(branchConfig.talents[fromIndex].id);
-      const toUnlocked = castleState.unlockedTalentIds.includes(talentConfig.id);
+      const fromTalent = branchConfig.talents[fromIndex];
+      const fromUnlocked = getTalentRank(castleState, fromTalent.id) >= (talentConfig.prerequisiteRank || 1);
+      const toUnlocked = getTalentRank(castleState, talentConfig.id) > 0;
       ctx.strokeStyle = "rgba(10, 8, 6, 0.78)";
       ctx.lineWidth = 7;
       ctx.beginPath();
@@ -2177,17 +2217,18 @@ export class UI {
 
     for (let i = 0; i < branchConfig.talents.length; i += 1) {
       const talentConfig = branchConfig.talents[i];
-      const unlocked = castleState.unlockedTalentIds.includes(talentConfig.id);
+      const rank = getTalentRank(castleState, talentConfig.id);
+      const unlocked = rank >= getTalentMaxRank(talentConfig);
       const canUnlock = game.castleSystem.canUnlockTalent(talentConfig.id);
       const node = nodeRects[i];
-      this.drawTalentIcon(ctx, talentConfig, node, branchConfig, { unlocked, canUnlock });
+      this.drawTalentIcon(ctx, talentConfig, node, branchConfig, { unlocked, canUnlock, rank });
       this.addButton("unlockTalent", node, "", {
         meta: { talentId: talentConfig.id },
         enabled: true,
       });
       const hover = rectContains(node, this.pointer.x, this.pointer.y);
       if (hover || this.isTalentHoldVisible(talentConfig.id)) {
-        this.talentTooltip = { talentConfig, branchConfig, node, unlocked, canUnlock };
+        this.talentTooltip = { talentConfig, branchConfig, node, unlocked, canUnlock, rank };
       }
     }
 
@@ -2203,7 +2244,10 @@ export class UI {
   drawTalentIcon(ctx, talentConfig, rect, branchConfig, state) {
     const palette = getBranchPalette(branchConfig.id);
     const hover = rectContains(rect, this.pointer.x, this.pointer.y);
-    const locked = !state.unlocked && !state.canUnlock;
+    const rank = state.rank || 0;
+    const maxRank = getTalentMaxRank(talentConfig);
+    const learned = rank > 0;
+    const locked = !learned && !state.canUnlock;
     const kind = getTalentKind(talentConfig);
     const seed = hashString(talentConfig.id);
     ctx.save();
@@ -2211,13 +2255,13 @@ export class UI {
     roundRect(ctx, rect.x - 3, rect.y - 3, rect.w + 6, rect.h + 6, 5);
     ctx.fillStyle = "#050403";
     ctx.fill();
-    ctx.strokeStyle = state.unlocked ? "#ffd564" : state.canUnlock ? "#7fe26f" : "rgba(220, 211, 186, 0.3)";
+    ctx.strokeStyle = state.unlocked ? "#ffd564" : learned ? "#cfa85f" : state.canUnlock ? "#7fe26f" : "rgba(220, 211, 186, 0.3)";
     ctx.lineWidth = hover || this.isTalentHoldVisible(talentConfig.id) ? 3 : 2;
     ctx.stroke();
 
     roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 4);
     const fill = ctx.createRadialGradient(rect.x + rect.w * 0.35, rect.y + rect.h * 0.24, 2, rect.x + rect.w * 0.5, rect.y + rect.h * 0.55, rect.w * 0.72);
-    fill.addColorStop(0, state.unlocked ? palette[2] : state.canUnlock ? "#e2d09a" : "#68645d");
+    fill.addColorStop(0, learned ? palette[2] : state.canUnlock ? "#e2d09a" : "#68645d");
     fill.addColorStop(0.34, palette[1]);
     fill.addColorStop(1, palette[0]);
     ctx.fillStyle = fill;
@@ -2286,14 +2330,14 @@ export class UI {
     const bx = rect.x + rect.w - badgeSize * 0.66;
     const by = rect.y + rect.h - badgeSize * 0.66;
     ctx.globalAlpha = 1;
-    ctx.fillStyle = state.unlocked ? "#2f7d2e" : "#10100e";
+    ctx.fillStyle = state.unlocked ? "#2f7d2e" : learned ? "#51401f" : "#10100e";
     ctx.beginPath();
     ctx.arc(bx, by, badgeSize * 0.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = state.unlocked ? "#b8ff8a" : "#ffd564";
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    if (state.unlocked) {
+    if (state.unlocked && maxRank === 1) {
       ctx.strokeStyle = "#d7ffd0";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -2302,7 +2346,8 @@ export class UI {
       ctx.lineTo(bx + badgeSize * 0.25, by - badgeSize * 0.2);
       ctx.stroke();
     } else {
-      drawFittedText(ctx, talentConfig.cost, bx, by + 0.5, badgeSize - 4, badgeSize * 0.62, "#ffd564", "center", "900");
+      const badgeText = maxRank > 1 ? `${rank}/${maxRank}` : talentConfig.cost;
+      drawFittedText(ctx, badgeText, bx, by + 0.5, badgeSize - 4, badgeSize * 0.56, state.unlocked ? "#d7ffd0" : "#ffd564", "center", "900");
     }
     ctx.restore();
   }
@@ -2315,13 +2360,16 @@ export class UI {
     }
     const { branchConfig, talentConfig } = context;
     const castleState = game.castleSystem.state;
-    const unlocked = castleState.unlockedTalentIds.includes(talentConfig.id);
+    const rank = getTalentRank(castleState, talentConfig.id);
+    const maxRank = getTalentMaxRank(talentConfig);
+    const unlocked = rank >= maxRank;
     const canUnlock = game.castleSystem.canUnlockTalent(talentConfig.id);
     const palette = getBranchPalette(branchConfig.id);
     let status = "Этот талант сейчас нельзя выбрать.";
     if (unlocked) status = "Этот талант уже изучен.";
     else if (canUnlock) status = `Стоимость: ${talentConfig.cost} очко талантов.`;
-    else if (talentConfig.prerequisite && !castleState.unlockedTalentIds.includes(talentConfig.prerequisite)) status = "Сначала нужно изучить предыдущий талант.";
+    else if (talentConfig.prerequisite && getTalentRank(castleState, talentConfig.prerequisite) < (talentConfig.prerequisiteRank || 1)) status = "Сначала нужно изучить предыдущий талант.";
+    else if (getBranchPreviousTierSpentPoints(branchConfig, castleState, talentConfig.row) < getTalentRequiredPreviousTierPoints(talentConfig)) status = `Нужно ${getTalentRequiredPreviousTierPoints(talentConfig)} очков в предыдущих тирах.`;
     else if (talentConfig.requiredPoints && game.castleSystem.getBranchSpentPoints(talentConfig.branch) < talentConfig.requiredPoints) status = `Нужно очков в этой ветке: ${talentConfig.requiredPoints}.`;
     else if (castleState.talentPoints < talentConfig.cost) status = `Нужно очков талантов: ${talentConfig.cost}.`;
 
@@ -2354,7 +2402,7 @@ export class UI {
     drawFittedText(ctx, branchConfig.name, x + 16, y + 76, textW, 12, palette[2], "left", "800");
 
     const iconRect = { x: x + width - 74, y: y + 44, w: 48, h: 48 };
-    this.drawTalentIcon(ctx, talentConfig, iconRect, branchConfig, { unlocked, canUnlock });
+    this.drawTalentIcon(ctx, talentConfig, iconRect, branchConfig, { unlocked, canUnlock, rank });
 
     ctx.font = "600 13px Trebuchet MS, Arial, sans-serif";
     ctx.fillStyle = "#e7dbc0";
@@ -2493,12 +2541,15 @@ export class UI {
   }
 
   drawTalentTooltip(ctx, game, tooltip) {
-    const { talentConfig, branchConfig, node, unlocked, canUnlock } = tooltip;
+    const { talentConfig, branchConfig, node, unlocked, canUnlock, rank = 0 } = tooltip;
+    const maxRank = getTalentMaxRank(talentConfig);
     const castleState = game.castleSystem.state;
     let status = "Unavailable";
-    if (unlocked) status = "Learned";
-    else if (canUnlock) status = `Click to learn: ${talentConfig.cost} point`;
-    else if (talentConfig.prerequisite && !castleState.unlockedTalentIds.includes(talentConfig.prerequisite)) status = "Requires the previous talent";
+    if (unlocked) status = maxRank > 1 ? `Learned ${rank}/${maxRank}` : "Learned";
+    else if (canUnlock) status = maxRank > 1 ? `Click to learn rank ${rank + 1}/${maxRank}` : `Click to learn: ${talentConfig.cost} point`;
+    else if (talentConfig.prerequisite && getTalentRank(castleState, talentConfig.prerequisite) < (talentConfig.prerequisiteRank || 1)) status = "Requires the previous talent";
+    else if (castleState.level < getTalentTierRequiredLevel(talentConfig)) status = `Requires castle level ${getTalentTierRequiredLevel(talentConfig)}`;
+    else if (getBranchPreviousTierSpentPoints(branchConfig, castleState, talentConfig.row) < getTalentRequiredPreviousTierPoints(talentConfig)) status = `Requires ${getTalentRequiredPreviousTierPoints(talentConfig)} points in previous tiers`;
     else if (talentConfig.requiredPoints && game.castleSystem.getBranchSpentPoints(talentConfig.branch) < talentConfig.requiredPoints) status = `Requires ${talentConfig.requiredPoints} points in this tree`;
     else if (castleState.talentPoints < talentConfig.cost) status = `Need ${talentConfig.cost} talent point`;
 

@@ -9,6 +9,8 @@ const MAX_CASTLE_LEVEL = 60;
 const DEFAULT_CASTLE_ID = "human";
 const CASTLE_MANA_MAX = 100;
 const CASTLE_MANA_REGEN_PER_SECOND = 7;
+const TALENT_ROW_REQUIRED_LEVELS = Object.freeze([1, 3, 6, 9, 12, 15, 18, 21]);
+const TALENT_ROW_REQUIRED_PREVIOUS_POINTS = Object.freeze([0, 3, 5, 8, 11, 14, 17, 20]);
 const ABILITY_MANA_COSTS = Object.freeze({
   heavenlyStrike: 45,
   rallyHorn: 35,
@@ -32,6 +34,7 @@ function createRuntimeState(castleId) {
     xpToNextLevel: 50,
     talentPoints: 1,
     unlockedTalentIds: [],
+    talentRanks: {},
     activeCooldowns: {},
     mana: {
       amount: CASTLE_MANA_MAX,
@@ -79,6 +82,17 @@ function findStrongestEnemy(enemies) {
 
 function getEffectValue(effect, key, fallback = 0) {
   return effect.stat === key ? effect.value : fallback;
+}
+
+function getTalentRequiredLevel(talentConfig) {
+  const rowLevel = Number.isFinite(talentConfig?.row)
+    ? TALENT_ROW_REQUIRED_LEVELS[talentConfig.row] || 1
+    : 1;
+  return Math.max(rowLevel, talentConfig?.requiredLevel || 1);
+}
+
+function getTalentMaxRank(talentConfig) {
+  return Math.max(1, talentConfig?.maxRank || 1);
 }
 
 export class CastleSystem {
@@ -292,12 +306,54 @@ export class CastleSystem {
     return new Set(this.state?.unlockedTalentIds || []);
   }
 
+  getTalentRank(talentId) {
+    if (!this.state || !talentId) return 0;
+    const explicitRank = this.state.talentRanks?.[talentId];
+    if (Number.isFinite(explicitRank)) return explicitRank;
+    let rank = 0;
+    for (let i = 0; i < this.state.unlockedTalentIds.length; i += 1) {
+      if (this.state.unlockedTalentIds[i] === talentId) rank += 1;
+    }
+    return rank;
+  }
+
+  hasTalent(talentId, rank = 1) {
+    return this.getTalentRank(talentId) >= rank;
+  }
+
+  getBranchPreviousTierSpentPoints(branchId, row) {
+    if (!Number.isFinite(row) || row <= 0) return 0;
+    let spent = 0;
+    const branchConfig = this.selectedCastle?.branches.find(
+      (branch) => branch.id === branchId,
+    );
+    if (!branchConfig) return 0;
+    for (let i = 0; i < branchConfig.talents.length; i += 1) {
+      const talentConfig = branchConfig.talents[i];
+      if (!Number.isFinite(talentConfig.row) || talentConfig.row >= row) continue;
+      spent += this.getTalentRank(talentConfig.id) * talentConfig.cost;
+    }
+    return spent;
+  }
+
+  getTalentRequiredPreviousTierPoints(talentConfig) {
+    if (!Number.isFinite(talentConfig?.row)) return 0;
+    return TALENT_ROW_REQUIRED_PREVIOUS_POINTS[talentConfig.row] || 0;
+  }
+
   canUnlockTalent(talentId) {
     if (!this.state) return false;
     const talentConfig = TALENTS_BY_ID[talentId];
-    if (!talentConfig || this.state.unlockedTalentIds.includes(talentId))
+    if (!talentConfig || this.getTalentRank(talentId) >= getTalentMaxRank(talentConfig))
       return false;
     if (this.state.talentPoints < talentConfig.cost) return false;
+    if (this.state.level < getTalentRequiredLevel(talentConfig))
+      return false;
+    if (
+      this.getBranchPreviousTierSpentPoints(talentConfig.branch, talentConfig.row) <
+      this.getTalentRequiredPreviousTierPoints(talentConfig)
+    )
+      return false;
     if (
       talentConfig.requiredPoints &&
       this.getBranchSpentPoints(talentConfig.branch) < talentConfig.requiredPoints
@@ -305,7 +361,7 @@ export class CastleSystem {
       return false;
     if (
       talentConfig.prerequisite &&
-      !this.state.unlockedTalentIds.includes(talentConfig.prerequisite)
+      !this.hasTalent(talentConfig.prerequisite, talentConfig.prerequisiteRank || 1)
     )
       return false;
     return (
@@ -319,13 +375,30 @@ export class CastleSystem {
     if (!this.canUnlockTalent(talentId)) return false;
     const talentConfig = TALENTS_BY_ID[talentId];
     this.state.talentPoints -= talentConfig.cost;
-    this.state.unlockedTalentIds.push(talentId);
-    if (talentConfig.final) this.state.finalTalentId = talentId;
+    this.state.talentRanks[talentId] = this.getTalentRank(talentId) + 1;
+    if (!this.state.unlockedTalentIds.includes(talentId)) this.state.unlockedTalentIds.push(talentId);
+    if (talentConfig.final && this.getTalentRank(talentId) >= getTalentMaxRank(talentConfig)) this.state.finalTalentId = talentId;
     for (let i = 0; i < this.game.towers.length; i += 1) {
       this.game.towers[i].applyCastleModifiers(this.game);
     }
     this.game.events.emit("talentUnlocked", talentConfig);
     return true;
+  }
+
+  getUnlockedAbilities() {
+    const abilities = this.selectedCastle?.abilities || [];
+    if (!this.state || !abilities.length) return [];
+    const unlockedAbilityIds = new Set();
+    this.applyTalentEffects((effect) => {
+      if (effect.type === "abilityUnlock" && effect.abilityId) {
+        unlockedAbilityIds.add(effect.abilityId);
+      }
+    });
+    return abilities.filter((ability) => unlockedAbilityIds.has(ability.id));
+  }
+
+  getUnlockedAbility(abilityId) {
+    return this.getUnlockedAbilities().find((ability) => ability.id === abilityId) || null;
   }
 
   getTowerModifiers(tower) {
@@ -375,9 +448,7 @@ export class CastleSystem {
     if (!branchConfig) return 0;
     for (let i = 0; i < branchConfig.talents.length; i += 1) {
       const talentConfig = branchConfig.talents[i];
-      if (this.state.unlockedTalentIds.includes(talentConfig.id)) {
-        spent += talentConfig.cost;
-      }
+      spent += this.getTalentRank(talentConfig.id) * talentConfig.cost;
     }
     return spent;
   }
@@ -429,8 +500,11 @@ export class CastleSystem {
     for (let i = 0; i < this.state.unlockedTalentIds.length; i += 1) {
       const talentConfig = TALENTS_BY_ID[this.state.unlockedTalentIds[i]];
       if (!talentConfig) continue;
-      for (let j = 0; j < talentConfig.effects.length; j += 1)
-        callback(talentConfig.effects[j]);
+      const rank = this.getTalentRank(talentConfig.id);
+      for (let repeat = 0; repeat < rank; repeat += 1) {
+        for (let j = 0; j < talentConfig.effects.length; j += 1)
+          callback(talentConfig.effects[j], talentConfig, repeat + 1);
+      }
     }
   }
 
@@ -449,18 +523,19 @@ export class CastleSystem {
 
   getAbilityCost(abilityConfig) {
     if (!abilityConfig) return 0;
+    if (abilityConfig.passive) return 0;
     return abilityConfig.manaCost ?? ABILITY_MANA_COSTS[abilityConfig.id] ?? 35;
   }
 
   getAbilitySoulCost(abilityConfig) {
+    if (abilityConfig?.passive) return 0;
     return abilityConfig?.soulsCost || 0;
   }
 
   canCastAbility(abilityId) {
-    const abilityConfig = this.selectedCastle?.abilities.find(
-      (ability) => ability.id === abilityId,
-    );
+    const abilityConfig = this.getUnlockedAbility(abilityId);
     if (!abilityConfig || !this.state) return false;
+    if (abilityConfig.passive) return false;
     if ((this.state.activeCooldowns[abilityId] || 0) > 0) return false;
     const cost = this.getAbilityCost(abilityConfig);
     const soulCost = this.getAbilitySoulCost(abilityConfig);
@@ -469,10 +544,9 @@ export class CastleSystem {
   }
 
   castAbility(abilityId, targetPoint = null) {
-    const abilityConfig = this.selectedCastle?.abilities.find(
-      (ability) => ability.id === abilityId,
-    );
+    const abilityConfig = this.getUnlockedAbility(abilityId);
     if (!abilityConfig || !this.state) return { ok: false };
+    if (abilityConfig.passive) return { ok: false, passive: true };
     if (!this.canCastAbility(abilityId)) return { ok: false };
     if (abilityConfig.target === "area" && !targetPoint) {
       this.game.pendingAbilityId = abilityId;
